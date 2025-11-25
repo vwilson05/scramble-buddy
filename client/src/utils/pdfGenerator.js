@@ -1,0 +1,197 @@
+import { jsPDF } from 'jspdf'
+
+export function generateResultsPDF(tournament, players, leaderboard, settlements, greenies) {
+  const doc = new jsPDF()
+  const pageWidth = doc.internal.pageSize.getWidth()
+  let y = 20
+
+  // Colors
+  const green = [34, 139, 34]
+  const gold = [255, 215, 0]
+  const dark = [26, 26, 46]
+
+  // Header
+  doc.setFillColor(...dark)
+  doc.rect(0, 0, pageWidth, 45, 'F')
+
+  doc.setTextColor(...green)
+  doc.setFontSize(28)
+  doc.setFont('helvetica', 'bold')
+  doc.text('Scramble', 20, 25)
+  doc.setTextColor(...gold)
+  doc.text('Buddy', 68, 25)
+
+  doc.setTextColor(255, 255, 255)
+  doc.setFontSize(12)
+  doc.setFont('helvetica', 'normal')
+  doc.text(tournament.name || 'Golf Round', 20, 35)
+  doc.setFontSize(10)
+  doc.setTextColor(180, 180, 180)
+  doc.text(`${tournament.course_name || 'Course'} - ${new Date(tournament.date).toLocaleDateString()}`, 20, 41)
+
+  y = 55
+
+  // Winner Section
+  if (leaderboard && leaderboard.length > 0) {
+    const winner = leaderboard[0]
+    doc.setFillColor(255, 215, 0, 0.1)
+    doc.setDrawColor(...gold)
+    doc.roundedRect(15, y, pageWidth - 30, 35, 3, 3, 'FD')
+
+    doc.setTextColor(...gold)
+    doc.setFontSize(12)
+    doc.text('WINNER', pageWidth / 2, y + 10, { align: 'center' })
+
+    doc.setTextColor(0, 0, 0)
+    doc.setFontSize(18)
+    doc.setFont('helvetica', 'bold')
+    const winnerName = winner.player?.name || `Team ${winner.team}`
+    doc.text(winnerName, pageWidth / 2, y + 22, { align: 'center' })
+
+    doc.setFontSize(14)
+    doc.setFont('helvetica', 'normal')
+    const scoreText = `${winner.grossTotal} (${winner.toPar >= 0 ? '+' : ''}${winner.toPar})`
+    doc.text(scoreText, pageWidth / 2, y + 30, { align: 'center' })
+
+    y += 45
+  }
+
+  // Leaderboard
+  doc.setTextColor(0, 0, 0)
+  doc.setFontSize(14)
+  doc.setFont('helvetica', 'bold')
+  doc.text('Final Standings', 20, y)
+  y += 8
+
+  // Table header
+  doc.setFillColor(240, 240, 240)
+  doc.rect(15, y, pageWidth - 30, 8, 'F')
+  doc.setFontSize(9)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(100, 100, 100)
+  doc.text('Pos', 20, y + 6)
+  doc.text('Player', 35, y + 6)
+  doc.text('Gross', 120, y + 6)
+  doc.text('Net', 145, y + 6)
+  doc.text('To Par', 170, y + 6)
+  y += 10
+
+  // Table rows
+  doc.setFont('helvetica', 'normal')
+  leaderboard.forEach((entry, index) => {
+    if (y > 270) {
+      doc.addPage()
+      y = 20
+    }
+
+    if (index % 2 === 0) {
+      doc.setFillColor(250, 250, 250)
+      doc.rect(15, y - 4, pageWidth - 30, 8, 'F')
+    }
+
+    doc.setTextColor(0, 0, 0)
+    doc.setFontSize(10)
+
+    // Position medal colors
+    if (index === 0) doc.setTextColor(...gold)
+    else if (index === 1) doc.setTextColor(192, 192, 192)
+    else if (index === 2) doc.setTextColor(205, 127, 50)
+    else doc.setTextColor(100, 100, 100)
+
+    doc.text(`${index + 1}`, 20, y + 2)
+
+    doc.setTextColor(0, 0, 0)
+    doc.text(entry.player?.name || `Team ${entry.team}`, 35, y + 2)
+    doc.text(`${entry.grossTotal}`, 120, y + 2)
+    doc.text(`${entry.netTotal || entry.grossTotal}`, 145, y + 2)
+
+    // To Par coloring
+    if (entry.toPar < 0) doc.setTextColor(...green)
+    else if (entry.toPar > 0) doc.setTextColor(220, 53, 69)
+    else doc.setTextColor(100, 100, 100)
+
+    const toParText = entry.toPar === 0 ? 'E' : (entry.toPar > 0 ? `+${entry.toPar}` : `${entry.toPar}`)
+    doc.text(toParText, 170, y + 2)
+
+    y += 8
+  })
+
+  y += 10
+
+  // Settlements
+  if (settlements && settlements.length > 0) {
+    if (y > 230) {
+      doc.addPage()
+      y = 20
+    }
+
+    doc.setTextColor(...gold)
+    doc.setFontSize(14)
+    doc.setFont('helvetica', 'bold')
+    doc.text('Settle Up', 20, y)
+    y += 10
+
+    doc.setFontSize(10)
+    doc.setFont('helvetica', 'normal')
+    settlements.forEach(s => {
+      if (y > 270) {
+        doc.addPage()
+        y = 20
+      }
+
+      doc.setTextColor(220, 53, 69)
+      doc.text(s.from, 25, y)
+      doc.setTextColor(100, 100, 100)
+      doc.text(' pays ', 25 + doc.getTextWidth(s.from), y)
+      doc.setTextColor(...green)
+      doc.text(s.to, 25 + doc.getTextWidth(s.from) + doc.getTextWidth(' pays '), y)
+      doc.setTextColor(...gold)
+      doc.setFont('helvetica', 'bold')
+      doc.text(`$${s.amount}`, 170, y)
+      doc.setFont('helvetica', 'normal')
+      y += 7
+    })
+    y += 5
+  }
+
+  // Greenies
+  if (greenies && greenies.length > 0) {
+    if (y > 240) {
+      doc.addPage()
+      y = 20
+    }
+
+    doc.setTextColor(...green)
+    doc.setFontSize(14)
+    doc.setFont('helvetica', 'bold')
+    doc.text('Greenies', 20, y)
+    y += 10
+
+    doc.setFontSize(10)
+    doc.setFont('helvetica', 'normal')
+    greenies.forEach(g => {
+      doc.setTextColor(0, 0, 0)
+      doc.text(`${g.player?.name}: ${g.greeniesWon} greenie${g.greeniesWon > 1 ? 's' : ''}`, 25, y)
+      y += 7
+    })
+  }
+
+  // Footer
+  const footerY = doc.internal.pageSize.getHeight() - 15
+  doc.setFontSize(8)
+  doc.setTextColor(150, 150, 150)
+  doc.text('Generated by Scramble Buddy', pageWidth / 2, footerY, { align: 'center' })
+
+  return doc
+}
+
+export function downloadResultsPDF(tournament, players, leaderboard, settlements, greenies) {
+  const doc = generateResultsPDF(tournament, players, leaderboard, settlements, greenies)
+  const filename = `${tournament.name?.replace(/\s+/g, '_') || 'round'}_results.pdf`
+  doc.save(filename)
+}
+
+export function getResultsPDFBase64(tournament, players, leaderboard, settlements, greenies) {
+  const doc = generateResultsPDF(tournament, players, leaderboard, settlements, greenies)
+  return doc.output('datauristring').split(',')[1]
+}
