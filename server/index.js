@@ -2,6 +2,7 @@ import express from 'express'
 import cors from 'cors'
 import dotenv from 'dotenv'
 import path from 'path'
+import fs from 'fs'
 import { fileURLToPath } from 'url'
 import tournamentRoutes from './routes/tournaments.js'
 import playerRoutes from './routes/players.js'
@@ -34,7 +35,24 @@ app.get('/api/health', (req, res) => {
 
 // Serve static files in production
 if (isProduction) {
-  const clientDist = path.join(__dirname, '../client/dist')
+  // Try multiple possible paths for client dist
+  const possiblePaths = [
+    path.join(__dirname, '../client/dist'),
+    path.join(process.cwd(), 'client/dist'),
+    '/app/client/dist'
+  ]
+
+  let clientDist = possiblePaths[0]
+  for (const p of possiblePaths) {
+    try {
+      if (fs.existsSync(p)) {
+        clientDist = p
+        console.log(`Found client dist at: ${p}`)
+        break
+      }
+    } catch (e) {}
+  }
+
   app.use(express.static(clientDist))
 
   // Handle client-side routing
