@@ -22,6 +22,8 @@ const showShareToast = ref(false)
 const showSideBets = ref(false)
 const showSelfieReminder = ref(false)
 const selfieReminderShown = ref(false)
+const showSideBetPrompt = ref(false)
+const sideBetPromptShown = ref(false)
 
 // Polling interval for live updates
 let pollInterval = null
@@ -30,6 +32,14 @@ onMounted(async () => {
   await loadTournament()
   // Start polling every 15 seconds
   pollInterval = setInterval(loadTournament, 15000)
+
+  // Show side bet prompt on hole 1 after a short delay
+  setTimeout(() => {
+    if (currentHole.value === 1 && !sideBetPromptShown.value) {
+      showSideBetPrompt.value = true
+      sideBetPromptShown.value = true
+    }
+  }, 1500)
 })
 
 onUnmounted(() => {
@@ -400,6 +410,25 @@ async function shareLink() {
         <button @click="showSelfieReminder = false" class="btn-gold w-full">
           Got it!
         </button>
+      </div>
+    </div>
+
+    <!-- Side Bet Prompt (Hole 1) -->
+    <div v-if="showSideBetPrompt" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <div class="card max-w-sm w-full animate-slide-up text-center">
+        <div class="text-5xl mb-4">🤝💰</div>
+        <h3 class="text-2xl font-bold mb-2">Any side action?</h3>
+        <p class="text-gray-400 mb-6">
+          Set up side bets between players or teams - Nassau, best ball, high-low, and more!
+        </p>
+        <div class="flex gap-3">
+          <button @click="showSideBetPrompt = false" class="flex-1 btn-secondary">
+            Not today
+          </button>
+          <button @click="showSideBetPrompt = false; showSideBets = true" class="flex-1 btn-gold">
+            Set up bets
+          </button>
+        </div>
       </div>
     </div>
 

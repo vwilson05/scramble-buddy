@@ -51,39 +51,51 @@ export function initializeDatabase(db) {
     db.exec(`ALTER TABLE tournaments ADD COLUMN selfie_hole INTEGER`)
   } catch (e) { /* column already exists */ }
 
-  // Side bets table (Nassau-style bets between 2 players or 2 teams)
+  // Side bets table - flexible mini-tournaments between any parties
+  // Each side bet is like its own game with its own format
+  // Presses create NEW side_bet entries with parent_bet_id set
   db.exec(`
     CREATE TABLE IF NOT EXISTS side_bets (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       tournament_id INTEGER NOT NULL,
-      bet_type TEXT NOT NULL, -- 'player' or 'team'
-      party1_id INTEGER NOT NULL, -- player_id or team number
-      party2_id INTEGER NOT NULL, -- player_id or team number
-      party1_name TEXT,
+      parent_bet_id INTEGER, -- null for original bet, set for presses
+      name TEXT,
+
+      -- Game format
+      game_type TEXT NOT NULL, -- 'match_play', 'best_ball', 'high_low', 'nassau', 'skins'
+      nassau_format TEXT, -- '9-9' or '6-6-6' (only for nassau type)
+      use_high_low INTEGER DEFAULT 0, -- 1 = use best+worst scoring for teams
+
+      -- Participants (JSON arrays of {playerId, playerName, team?})
+      party1 TEXT NOT NULL, -- JSON array
+      party2 TEXT NOT NULL, -- JSON array
+      party1_name TEXT, -- Display name like "Team 1" or "John & Mike"
       party2_name TEXT,
-      front_amount REAL DEFAULT 0,
-      back_amount REAL DEFAULT 0,
-      overall_amount REAL DEFAULT 0,
-      auto_press INTEGER DEFAULT 0, -- auto-press when down by X holes (0 = manual only)
+
+      -- Bet amounts (in dollars)
+      front_amount REAL DEFAULT 0, -- holes 1-9 or 1-6
+      middle_amount REAL DEFAULT 0, -- holes 7-12 (6-6-6 only)
+      back_amount REAL DEFAULT 0, -- holes 10-18 or 13-18
+      overall_amount REAL DEFAULT 0, -- full 18
+      per_hole_amount REAL DEFAULT 0, -- for skins/match play per hole
+
+      -- For presses: which segment and starting hole
+      segment TEXT, -- 'front', 'middle', 'back', 'overall' (null = all segments)
+      start_hole INTEGER DEFAULT 1,
+
+      auto_press INTEGER DEFAULT 0, -- auto-press when down by X holes
+      status TEXT DEFAULT 'active', -- 'active', 'completed'
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (tournament_id) REFERENCES tournaments(id) ON DELETE CASCADE
+
+      FOREIGN KEY (tournament_id) REFERENCES tournaments(id) ON DELETE CASCADE,
+      FOREIGN KEY (parent_bet_id) REFERENCES side_bets(id) ON DELETE CASCADE
     )
   `)
 
-  // Bet presses table (tracks each press and its status)
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS bet_presses (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      side_bet_id INTEGER NOT NULL,
-      segment TEXT NOT NULL, -- 'front', 'back', 'overall'
-      start_hole INTEGER NOT NULL, -- hole where press starts
-      amount REAL NOT NULL,
-      parent_press_id INTEGER, -- null for original bet, otherwise points to pressed bet
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (side_bet_id) REFERENCES side_bets(id) ON DELETE CASCADE,
-      FOREIGN KEY (parent_press_id) REFERENCES bet_presses(id) ON DELETE CASCADE
-    )
-  `)
+  // Drop old bet_presses table if exists (no longer needed - presses are side_bets)
+  try {
+    db.exec(`DROP TABLE IF EXISTS bet_presses`)
+  } catch (e) { /* ignore */ }
 
   // Players table
   db.exec(`
