@@ -51,6 +51,15 @@ export function initializeDatabase(db) {
     db.exec(`ALTER TABLE tournaments ADD COLUMN selfie_hole INTEGER`)
   } catch (e) { /* column already exists */ }
 
+  // Add Nassau segment/overall bet columns
+  try {
+    db.exec(`ALTER TABLE tournaments ADD COLUMN nassau_segment_bet REAL`)
+  } catch (e) { /* column already exists */ }
+
+  try {
+    db.exec(`ALTER TABLE tournaments ADD COLUMN nassau_overall_bet REAL`)
+  } catch (e) { /* column already exists */ }
+
   // Side bets table - flexible mini-tournaments between any parties
   // Each side bet is like its own game with its own format
   // Presses create NEW side_bet entries with parent_bet_id set
@@ -157,6 +166,82 @@ export function initializeDatabase(db) {
       cached_at TEXT DEFAULT CURRENT_TIMESTAMP
     )
   `)
+
+  // Calcutta auction configuration
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS calcutta_config (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tournament_id INTEGER NOT NULL UNIQUE,
+      enabled INTEGER DEFAULT 0,
+      payout_structure TEXT, -- JSON: [{place: 1, type: 'percent'|'fixed', value: 50}, ...]
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (tournament_id) REFERENCES tournaments(id) ON DELETE CASCADE
+    )
+  `)
+
+  // Calcutta team purchases (who bought which team for how much)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS calcutta_purchases (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tournament_id INTEGER NOT NULL,
+      team_number INTEGER NOT NULL,
+      buyer_name TEXT NOT NULL,
+      amount REAL NOT NULL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (tournament_id) REFERENCES tournaments(id) ON DELETE CASCADE,
+      UNIQUE(tournament_id, team_number)
+    )
+  `)
+
+  // Multi-day tournament container
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS multi_day_tournaments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      start_date TEXT NOT NULL,
+      end_date TEXT,
+      num_days INTEGER DEFAULT 1,
+      num_rounds INTEGER DEFAULT 1,
+      point_system TEXT, -- JSON: [{place: 1, points: 10}, {place: 2, points: 8}, ...]
+      payout_structure TEXT, -- JSON for overall payouts
+      status TEXT DEFAULT 'setup', -- 'setup', 'active', 'completed'
+      slug TEXT UNIQUE,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+  `)
+
+  // Multi-day players (master list shared across all rounds)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS multi_day_players (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      multi_day_id INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      handicap REAL DEFAULT 0,
+      team INTEGER,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (multi_day_id) REFERENCES multi_day_tournaments(id) ON DELETE CASCADE
+    )
+  `)
+
+  // Add multi_day_id to tournaments (links a round to its parent multi-day)
+  try {
+    db.exec(`ALTER TABLE tournaments ADD COLUMN multi_day_id INTEGER REFERENCES multi_day_tournaments(id)`)
+  } catch (e) { /* column already exists */ }
+
+  // Add round_number to tournaments
+  try {
+    db.exec(`ALTER TABLE tournaments ADD COLUMN round_number INTEGER`)
+  } catch (e) { /* column already exists */ }
+
+  // Add day_number to tournaments (which day of the multi-day event)
+  try {
+    db.exec(`ALTER TABLE tournaments ADD COLUMN day_number INTEGER`)
+  } catch (e) { /* column already exists */ }
+
+  // Add multi_day_player_id to players (links round player to master player)
+  try {
+    db.exec(`ALTER TABLE players ADD COLUMN multi_day_player_id INTEGER`)
+  } catch (e) { /* column already exists */ }
 
   console.log('Database initialized successfully')
 }

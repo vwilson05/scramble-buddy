@@ -10,6 +10,8 @@ import scoreRoutes from './routes/scores.js'
 import courseRoutes from './routes/courses.js'
 import emailRoutes from './routes/email.js'
 import sideBetRoutes from './routes/sidebets.js'
+import calcuttaRoutes from './routes/calcutta.js'
+import multiDayRoutes from './routes/multiday.js'
 
 dotenv.config()
 
@@ -29,6 +31,8 @@ app.use('/api/scores', scoreRoutes)
 app.use('/api/courses', courseRoutes)
 app.use('/api/email', emailRoutes)
 app.use('/api/sidebets', sideBetRoutes)
+app.use('/api/calcutta', calcuttaRoutes)
+app.use('/api/multiday', multiDayRoutes)
 
 // Health check
 app.get('/api/health', (req, res) => {

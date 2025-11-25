@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useTournamentStore } from '../stores/tournament'
 import { useCourseStore } from '../stores/course'
+import BetTracker from '../components/BetTracker.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -11,7 +12,10 @@ const courseStore = useCourseStore()
 
 const tournamentId = computed(() => route.params.id)
 const showBets = ref(false)
+const showBetTracker = ref(false)
 const leaderboardData = ref(null)
+const showNet = ref(true) // Default to net scoring for bets
+const expandedPlayer = ref(null) // For accordion scorecard
 
 let pollInterval = null
 
@@ -30,7 +34,12 @@ async function loadData() {
 }
 
 const leaderboard = computed(() => {
-  return leaderboardData.value?.leaderboard || []
+  const data = leaderboardData.value?.leaderboard || []
+  if (showNet.value) {
+    // Sort by net total for net scoring
+    return [...data].sort((a, b) => a.netTotal - b.netTotal)
+  }
+  return data
 })
 
 const settlements = computed(() => {
@@ -59,6 +68,25 @@ function getPositionClass(index) {
 function getPositionBg(index) {
   if (index === 0) return 'bg-gold/10 border-gold/30'
   return 'bg-gray-800/50 border-gray-700/50'
+}
+
+function toggleScorecard(playerId) {
+  expandedPlayer.value = expandedPlayer.value === playerId ? null : playerId
+}
+
+function getScoreClass(strokes, par) {
+  if (!strokes) return 'text-gray-500'
+  const diff = strokes - par
+  if (diff <= -2) return 'bg-yellow-500 text-dark' // Eagle or better
+  if (diff === -1) return 'bg-golf-green text-white' // Birdie
+  if (diff === 0) return 'text-white' // Par
+  if (diff === 1) return 'bg-orange-500/80 text-white' // Bogey
+  return 'bg-red-500/80 text-white' // Double+
+}
+
+function getHolePars() {
+  // Return pars for holes 1-18
+  return courseStore.holes.map(h => h.par) || Array(18).fill(4)
 }
 </script>
 
@@ -90,10 +118,30 @@ function getPositionBg(index) {
       Live updates every 15s
     </div>
 
-    <!-- Game Type Badge -->
-    <div class="px-4 mb-4">
+    <!-- Game Type Badge + Gross/Net Toggle -->
+    <div class="px-4 mb-4 flex items-center justify-between">
       <div class="inline-block px-3 py-1 bg-gray-800 rounded-full text-sm">
         {{ store.currentTournament?.game_type?.replace('_', ' ').toUpperCase() }}
+      </div>
+      <div class="flex bg-gray-800 rounded-lg p-1">
+        <button
+          @click="showNet = false"
+          :class="[
+            'px-3 py-1 rounded text-sm font-medium transition-all',
+            !showNet ? 'bg-golf-green text-white' : 'text-gray-400'
+          ]"
+        >
+          Gross
+        </button>
+        <button
+          @click="showNet = true"
+          :class="[
+            'px-3 py-1 rounded text-sm font-medium transition-all',
+            showNet ? 'bg-golf-green text-white' : 'text-gray-400'
+          ]"
+        >
+          Net
+        </button>
       </div>
     </div>
 
@@ -104,7 +152,11 @@ function getPositionBg(index) {
         :key="entry.player?.id || entry.team"
         :class="['card border', getPositionBg(index)]"
       >
-        <div class="flex items-center gap-4">
+        <!-- Clickable header row -->
+        <div
+          class="flex items-center gap-4 cursor-pointer"
+          @click="entry.player?.id && toggleScorecard(entry.player.id)"
+        >
           <!-- Position -->
           <div :class="['text-2xl font-bold w-8', getPositionClass(index)]">
             {{ index + 1 }}
@@ -112,28 +164,154 @@ function getPositionBg(index) {
 
           <!-- Player/Team Info -->
           <div class="flex-1">
-            <div class="font-bold">
+            <div class="font-bold flex items-center gap-2">
               {{ entry.player?.name || `Team ${entry.team}` }}
+              <!-- Expand indicator -->
+              <svg
+                v-if="entry.player?.id"
+                :class="['w-4 h-4 text-gray-500 transition-transform', expandedPlayer === entry.player?.id ? 'rotate-180' : '']"
+                fill="none" stroke="currentColor" viewBox="0 0 24 24"
+              >
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+              </svg>
             </div>
             <div class="text-xs text-gray-400">
-              <span v-if="entry.player?.courseHandicap">{{ entry.player.courseHandicap }} HCP</span>
+              <span v-if="entry.player?.courseHandicap !== undefined">
+                {{ entry.player.courseHandicap }} HCP
+                <span v-if="entry.player.courseHandicap > 0" class="text-golf-green">
+                  ({{ entry.player.courseHandicap }} strokes)
+                </span>
+              </span>
               <span v-if="entry.holesPlayed"> • {{ entry.holesPlayed }} holes</span>
             </div>
           </div>
 
           <!-- Score -->
           <div class="text-right">
-            <div class="text-2xl font-bold" :class="entry.toPar < 0 ? 'text-golf-green' : entry.toPar > 0 ? 'text-red-400' : ''">
-              {{ entry.toPar === 0 ? 'E' : entry.toPar > 0 ? `+${entry.toPar}` : entry.toPar }}
+            <div class="text-2xl font-bold" :class="(showNet ? entry.toParNet : entry.toPar) < 0 ? 'text-golf-green' : (showNet ? entry.toParNet : entry.toPar) > 0 ? 'text-red-400' : ''">
+              {{ (showNet ? entry.toParNet : entry.toPar) === 0 ? 'E' : (showNet ? entry.toParNet : entry.toPar) > 0 ? `+${showNet ? entry.toParNet : entry.toPar}` : (showNet ? entry.toParNet : entry.toPar) }}
             </div>
             <div class="text-xs text-gray-400">
-              {{ entry.grossTotal }} gross
+              {{ showNet ? entry.netTotal : entry.grossTotal }} {{ showNet ? 'net' : 'gross' }}
             </div>
           </div>
         </div>
 
+        <!-- Accordion Scorecard -->
+        <Transition name="accordion">
+          <div v-if="expandedPlayer === entry.player?.id && entry.holeScores" class="mt-4 pt-4 border-t border-gray-700/50">
+            <!-- Front 9 -->
+            <div class="mb-3">
+              <div class="text-xs text-gray-500 mb-1">FRONT 9</div>
+              <div class="flex gap-1">
+                <div class="flex-1 text-center text-xs text-gray-500">Hole</div>
+                <div v-for="hole in 9" :key="hole" class="w-7 text-center text-xs text-gray-500">{{ hole }}</div>
+                <div class="w-10 text-center text-xs text-gray-500">OUT</div>
+              </div>
+              <div class="flex gap-1 mt-1">
+                <div class="flex-1 text-center text-xs text-gray-400">Par</div>
+                <div v-for="hole in 9" :key="'par-' + hole" class="w-7 text-center text-xs text-gray-400">
+                  {{ courseStore.holes[hole - 1]?.par || 4 }}
+                </div>
+                <div class="w-10 text-center text-xs text-gray-400 font-semibold">
+                  {{ courseStore.holes.slice(0, 9).reduce((s, h) => s + h.par, 0) }}
+                </div>
+              </div>
+              <div class="flex gap-1 mt-1">
+                <div class="flex-1 text-center text-xs font-semibold">Score</div>
+                <div
+                  v-for="hole in 9"
+                  :key="'score-' + hole"
+                  :class="['w-7 h-7 text-center text-sm font-bold rounded flex items-center justify-center', getScoreClass(entry.holeScores[hole - 1]?.gross, courseStore.holes[hole - 1]?.par || 4)]"
+                >
+                  {{ entry.holeScores[hole - 1]?.gross || '-' }}
+                </div>
+                <div class="w-10 text-center text-sm font-bold bg-gray-700 rounded flex items-center justify-center">
+                  {{ entry.front9Gross || '-' }}
+                </div>
+              </div>
+              <div v-if="showNet" class="flex gap-1 mt-1">
+                <div class="flex-1 text-center text-xs text-golf-green">Net</div>
+                <div
+                  v-for="hole in 9"
+                  :key="'net-' + hole"
+                  class="w-7 text-center text-xs text-golf-green"
+                >
+                  {{ entry.holeScores[hole - 1]?.net || '-' }}
+                  <span v-if="entry.holeScores[hole - 1]?.strokes" class="text-yellow-500">*</span>
+                </div>
+                <div class="w-10 text-center text-xs text-golf-green font-semibold">
+                  {{ entry.front9Net || '-' }}
+                </div>
+              </div>
+            </div>
+
+            <!-- Back 9 -->
+            <div>
+              <div class="text-xs text-gray-500 mb-1">BACK 9</div>
+              <div class="flex gap-1">
+                <div class="flex-1 text-center text-xs text-gray-500">Hole</div>
+                <div v-for="hole in 9" :key="hole + 9" class="w-7 text-center text-xs text-gray-500">{{ hole + 9 }}</div>
+                <div class="w-10 text-center text-xs text-gray-500">IN</div>
+              </div>
+              <div class="flex gap-1 mt-1">
+                <div class="flex-1 text-center text-xs text-gray-400">Par</div>
+                <div v-for="hole in 9" :key="'par-' + (hole + 9)" class="w-7 text-center text-xs text-gray-400">
+                  {{ courseStore.holes[hole + 8]?.par || 4 }}
+                </div>
+                <div class="w-10 text-center text-xs text-gray-400 font-semibold">
+                  {{ courseStore.holes.slice(9, 18).reduce((s, h) => s + h.par, 0) }}
+                </div>
+              </div>
+              <div class="flex gap-1 mt-1">
+                <div class="flex-1 text-center text-xs font-semibold">Score</div>
+                <div
+                  v-for="hole in 9"
+                  :key="'score-' + (hole + 9)"
+                  :class="['w-7 h-7 text-center text-sm font-bold rounded flex items-center justify-center', getScoreClass(entry.holeScores[hole + 8]?.gross, courseStore.holes[hole + 8]?.par || 4)]"
+                >
+                  {{ entry.holeScores[hole + 8]?.gross || '-' }}
+                </div>
+                <div class="w-10 text-center text-sm font-bold bg-gray-700 rounded flex items-center justify-center">
+                  {{ entry.back9Gross || '-' }}
+                </div>
+              </div>
+              <div v-if="showNet" class="flex gap-1 mt-1">
+                <div class="flex-1 text-center text-xs text-golf-green">Net</div>
+                <div
+                  v-for="hole in 9"
+                  :key="'net-' + (hole + 9)"
+                  class="w-7 text-center text-xs text-golf-green"
+                >
+                  {{ entry.holeScores[hole + 8]?.net || '-' }}
+                  <span v-if="entry.holeScores[hole + 8]?.strokes" class="text-yellow-500">*</span>
+                </div>
+                <div class="w-10 text-center text-xs text-golf-green font-semibold">
+                  {{ entry.back9Net || '-' }}
+                </div>
+              </div>
+            </div>
+
+            <!-- Total -->
+            <div class="flex justify-end mt-3 pt-2 border-t border-gray-700/30">
+              <div class="text-right">
+                <div class="text-xs text-gray-500">TOTAL</div>
+                <div class="font-bold">
+                  {{ entry.grossTotal }} gross
+                  <span v-if="showNet" class="text-golf-green ml-2">{{ entry.netTotal }} net</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Legend -->
+            <div v-if="showNet" class="mt-2 text-xs text-gray-500 flex items-center gap-1">
+              <span class="text-yellow-500">*</span> = stroke received
+            </div>
+          </div>
+        </Transition>
+
         <!-- Stats Bar -->
-        <div v-if="entry.stats" class="flex gap-4 mt-3 pt-3 border-t border-gray-700/50 text-xs">
+        <div v-if="entry.stats && expandedPlayer !== entry.player?.id" class="flex gap-4 mt-3 pt-3 border-t border-gray-700/50 text-xs">
           <div v-if="entry.stats.birdies" class="text-golf-green">
             {{ entry.stats.birdies }} birdies
           </div>
@@ -222,7 +400,7 @@ function getPositionBg(index) {
           <span class="text-xs mt-1">Leaderboard</span>
         </button>
         <button
-          @click="router.push(`/tournament/${tournamentId}/results`)"
+          @click="showBetTracker = true"
           class="flex flex-col items-center text-gray-400"
         >
           <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -231,6 +409,15 @@ function getPositionBg(index) {
           <span class="text-xs mt-1">Bets</span>
         </button>
       </div>
+    </div>
+
+    <!-- Bet Tracker Modal -->
+    <div v-if="showBetTracker" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <BetTracker
+        :tournament-id="tournamentId"
+        :current-hole="1"
+        @close="showBetTracker = false"
+      />
     </div>
   </div>
 </template>
@@ -244,5 +431,25 @@ function getPositionBg(index) {
 .slide-enter-from,
 .slide-leave-to {
   transform: translateY(100%);
+}
+
+.accordion-enter-active,
+.accordion-leave-active {
+  transition: all 0.3s ease;
+  overflow: hidden;
+}
+
+.accordion-enter-from,
+.accordion-leave-to {
+  max-height: 0;
+  opacity: 0;
+  padding-top: 0;
+  margin-top: 0;
+}
+
+.accordion-enter-to,
+.accordion-leave-from {
+  max-height: 500px;
+  opacity: 1;
 }
 </style>

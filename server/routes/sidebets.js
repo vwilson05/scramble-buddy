@@ -189,18 +189,35 @@ function calculateBetStatus(bet, players, scores) {
   const party1Ids = party1.map(p => p.playerId)
   const party2Ids = party2.map(p => p.playerId)
 
+  // Get tournament for slope rating and hole handicap ratings
+  const tournament = db.prepare('SELECT * FROM tournaments WHERE id = ?').get(bet.tournament_id)
+  const slopeRating = tournament?.slope_rating || 113
+
+  // Get hole data for handicap ratings
+  const holes = tournament?.course_id
+    ? db.prepare('SELECT * FROM holes WHERE course_id = ? ORDER BY hole_number').all(tournament.course_id)
+    : []
+  const holeMap = {}
+  holes.forEach(h => { holeMap[h.hole_number] = h })
+
+  // Build player handicap map (course handicap, not index)
+  const playerHandicaps = {}
+  players.forEach(p => {
+    playerHandicaps[p.id] = Math.round((p.handicap || 0) * (slopeRating / 113))
+  })
+
   // Determine segments based on game type
   if (bet.game_type === 'nassau') {
-    return calculateNassauStatus(bet, party1Ids, party2Ids, scores, useHighLow, startHole)
+    return calculateNassauStatus(bet, party1Ids, party2Ids, scores, useHighLow, startHole, playerHandicaps, holeMap)
   } else if (bet.game_type === 'skins') {
-    return calculateSkinsStatus(bet, party1Ids, party2Ids, scores, startHole)
+    return calculateSkinsStatus(bet, party1Ids, party2Ids, scores, startHole, playerHandicaps, holeMap)
   } else {
     // match_play, best_ball, high_low - single match
-    return calculateMatchStatus(bet, party1Ids, party2Ids, scores, useHighLow, startHole, 1, 18)
+    return calculateMatchStatus(bet, party1Ids, party2Ids, scores, useHighLow, startHole, 1, 18, playerHandicaps, holeMap)
   }
 }
 
-function calculateNassauStatus(bet, party1Ids, party2Ids, scores, useHighLow, startHole) {
+function calculateNassauStatus(bet, party1Ids, party2Ids, scores, useHighLow, startHole, playerHandicaps, holeMap) {
   const format = bet.nassau_format || '9-9'
   const segment = bet.segment // If this is a press, only calculate that segment
 
@@ -209,50 +226,50 @@ function calculateNassauStatus(bet, party1Ids, party2Ids, scores, useHighLow, st
   if (format === '6-6-6') {
     if (!segment || segment === 'front') {
       segments.front = calculateMatchStatus(bet, party1Ids, party2Ids, scores, useHighLow,
-        Math.max(startHole, 1), 1, 6)
+        Math.max(startHole, 1), 1, 6, playerHandicaps, holeMap)
       segments.front.amount = bet.front_amount
     }
     if (!segment || segment === 'middle') {
       segments.middle = calculateMatchStatus(bet, party1Ids, party2Ids, scores, useHighLow,
-        Math.max(startHole, 7), 7, 12)
+        Math.max(startHole, 7), 7, 12, playerHandicaps, holeMap)
       segments.middle.amount = bet.middle_amount
     }
     if (!segment || segment === 'back') {
       segments.back = calculateMatchStatus(bet, party1Ids, party2Ids, scores, useHighLow,
-        Math.max(startHole, 13), 13, 18)
+        Math.max(startHole, 13), 13, 18, playerHandicaps, holeMap)
       segments.back.amount = bet.back_amount
     }
   } else {
     // 9-9 format
     if (!segment || segment === 'front') {
       segments.front = calculateMatchStatus(bet, party1Ids, party2Ids, scores, useHighLow,
-        Math.max(startHole, 1), 1, 9)
+        Math.max(startHole, 1), 1, 9, playerHandicaps, holeMap)
       segments.front.amount = bet.front_amount
     }
     if (!segment || segment === 'back') {
       segments.back = calculateMatchStatus(bet, party1Ids, party2Ids, scores, useHighLow,
-        Math.max(startHole, 10), 10, 18)
+        Math.max(startHole, 10), 10, 18, playerHandicaps, holeMap)
       segments.back.amount = bet.back_amount
     }
   }
 
   if (!segment || segment === 'overall') {
     segments.overall = calculateMatchStatus(bet, party1Ids, party2Ids, scores, useHighLow,
-      startHole, 1, 18)
+      startHole, 1, 18, playerHandicaps, holeMap)
     segments.overall.amount = bet.overall_amount
   }
 
   return segments
 }
 
-function calculateMatchStatus(bet, party1Ids, party2Ids, scores, useHighLow, startHole, segmentStart, segmentEnd) {
+function calculateMatchStatus(bet, party1Ids, party2Ids, scores, useHighLow, startHole, segmentStart, segmentEnd, playerHandicaps, holeMap) {
   let party1Wins = 0
   let party2Wins = 0
   let ties = 0
   let holesPlayed = 0
 
   for (let hole = Math.max(startHole, segmentStart); hole <= segmentEnd; hole++) {
-    const result = compareHole(hole, party1Ids, party2Ids, scores, useHighLow, bet.game_type)
+    const result = compareHole(hole, party1Ids, party2Ids, scores, useHighLow, bet.game_type, playerHandicaps, holeMap)
 
     if (result === null) continue // No scores for this hole
 
@@ -281,17 +298,42 @@ function calculateMatchStatus(bet, party1Ids, party2Ids, scores, useHighLow, sta
   }
 }
 
-function compareHole(holeNumber, party1Ids, party2Ids, scores, useHighLow, gameType) {
-  // Get scores for this hole for each party
-  const party1Scores = party1Ids
-    .map(id => scores.find(s => s.player_id === id && s.hole_number === holeNumber)?.strokes)
-    .filter(s => s !== undefined && s !== null)
+// Helper to calculate strokes received on a hole
+// Note: No strokes given on par 3s (common rule)
+function getStrokesOnHole(courseHandicap, holeHandicapRating, holePar) {
+  if (!courseHandicap || courseHandicap <= 0) return 0
+  if (!holeHandicapRating) return 0
+  if (holePar === 3) return 0 // No strokes on par 3s
+  const fullStrokes = Math.floor(courseHandicap / 18)
+  const remainingStrokes = courseHandicap % 18
+  return fullStrokes + (holeHandicapRating <= remainingStrokes ? 1 : 0)
+}
 
-  const party2Scores = party2Ids
-    .map(id => scores.find(s => s.player_id === id && s.hole_number === holeNumber)?.strokes)
-    .filter(s => s !== undefined && s !== null)
+function compareHole(holeNumber, party1Ids, party2Ids, scores, useHighLow, gameType, playerHandicaps, holeMap) {
+  const hole = holeMap[holeNumber]
+  const holeHandicapRating = hole?.handicap_rating || holeNumber // Fallback to hole number
+  const holePar = hole?.par || 4
 
-  if (party1Scores.length === 0 || party2Scores.length === 0) {
+  // Get NET scores for this hole for each party
+  const party1NetScores = party1Ids
+    .map(id => {
+      const score = scores.find(s => s.player_id === id && s.hole_number === holeNumber)
+      if (!score || score.strokes === undefined || score.strokes === null) return null
+      const strokes = getStrokesOnHole(playerHandicaps[id] || 0, holeHandicapRating, holePar)
+      return score.strokes - strokes // Net score
+    })
+    .filter(s => s !== null)
+
+  const party2NetScores = party2Ids
+    .map(id => {
+      const score = scores.find(s => s.player_id === id && s.hole_number === holeNumber)
+      if (!score || score.strokes === undefined || score.strokes === null) return null
+      const strokes = getStrokesOnHole(playerHandicaps[id] || 0, holeHandicapRating, holePar)
+      return score.strokes - strokes // Net score
+    })
+    .filter(s => s !== null)
+
+  if (party1NetScores.length === 0 || party2NetScores.length === 0) {
     return null // Can't compare, missing scores
   }
 
@@ -299,39 +341,45 @@ function compareHole(holeNumber, party1Ids, party2Ids, scores, useHighLow, gameT
 
   if (gameType === 'high_low' || useHighLow) {
     // High-low: best + worst
-    party1Score = Math.min(...party1Scores) + Math.max(...party1Scores)
-    party2Score = Math.min(...party2Scores) + Math.max(...party2Scores)
+    party1Score = Math.min(...party1NetScores) + Math.max(...party1NetScores)
+    party2Score = Math.min(...party2NetScores) + Math.max(...party2NetScores)
   } else {
     // Best ball: just the lowest
-    party1Score = Math.min(...party1Scores)
-    party2Score = Math.min(...party2Scores)
+    party1Score = Math.min(...party1NetScores)
+    party2Score = Math.min(...party2NetScores)
   }
 
   // Return negative if party1 wins, positive if party2 wins, 0 for tie
   return party1Score - party2Score
 }
 
-function calculateSkinsStatus(bet, party1Ids, party2Ids, scores, startHole) {
-  // For skins, everyone competes individually
+function calculateSkinsStatus(bet, party1Ids, party2Ids, scores, startHole, playerHandicaps, holeMap) {
+  // For skins, everyone competes individually using NET scores
   const allPlayerIds = [...party1Ids, ...party2Ids]
   const skins = []
   let carryover = 0
 
   for (let hole = startHole; hole <= 18; hole++) {
-    const holeScores = allPlayerIds
+    const holeData = holeMap[hole]
+    const holeHandicapRating = holeData?.handicap_rating || hole
+    const holePar = holeData?.par || 4
+
+    const holeNetScores = allPlayerIds
       .map(id => {
         const score = scores.find(s => s.player_id === id && s.hole_number === hole)
-        return score ? { playerId: id, strokes: score.strokes } : null
+        if (!score) return null
+        const strokes = getStrokesOnHole(playerHandicaps[id] || 0, holeHandicapRating, holePar)
+        return { playerId: id, netScore: score.strokes - strokes }
       })
       .filter(s => s !== null)
 
-    if (holeScores.length < allPlayerIds.length) {
+    if (holeNetScores.length < allPlayerIds.length) {
       // Not all scores in yet
       continue
     }
 
-    const minScore = Math.min(...holeScores.map(s => s.strokes))
-    const winners = holeScores.filter(s => s.strokes === minScore)
+    const minScore = Math.min(...holeNetScores.map(s => s.netScore))
+    const winners = holeNetScores.filter(s => s.netScore === minScore)
 
     if (winners.length === 1) {
       skins.push({

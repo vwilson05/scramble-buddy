@@ -3,15 +3,17 @@ import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useTournamentStore } from '../stores/tournament'
 import { useCourseStore } from '../stores/course'
+import { useCalcuttaStore } from '../stores/calcutta'
 import { GAME_TYPE_INFO } from '../utils/scoring'
 
 const router = useRouter()
 const tournamentStore = useTournamentStore()
 const courseStore = useCourseStore()
+const calcuttaStore = useCalcuttaStore()
 
 // Wizard step
 const step = ref(1)
-const totalSteps = 5
+const totalSteps = 6
 
 // Form data
 const tournamentName = ref('')
@@ -26,6 +28,9 @@ const players = ref([
 ])
 const numTeams = ref(2)
 const betAmount = ref(5)
+const nassauSegmentBet = ref(10)
+const nassauOverallBet = ref(20)
+const nassauAutoDouble = ref(true)
 const greenieAmount = ref(1)
 const skinsAmount = ref(1)
 const selectedGreenieHoles = ref([])
@@ -40,6 +45,14 @@ const individualPayouts = ref([
   { place: 2, amount: 75 }
 ])
 const greeniePot = ref(100)
+
+// Calcutta
+const enableCalcutta = ref(false)
+const calcuttaPayouts = ref([
+  { place: 1, percent: 50 },
+  { place: 2, percent: 30 },
+  { place: 3, percent: 20 }
+])
 
 // Computed
 const gameInfo = computed(() => GAME_TYPE_INFO[gameType.value])
@@ -70,8 +83,13 @@ const canProceed = computed(() => {
       }
       return true
     case 5: return true
+    case 6: return true // Calcutta is optional
     default: return false
   }
+})
+
+const calcuttaTotalPercent = computed(() => {
+  return calcuttaPayouts.value.reduce((sum, p) => sum + (p.percent || 0), 0)
 })
 
 const teamColors = ['golf-green', 'gold', 'blue-500', 'purple-500', 'pink-500', 'orange-500']
@@ -97,6 +115,19 @@ watch(playAsTeams, (isTeam) => {
 
 watch(numTeams, () => {
   distributePlayersToTeams()
+})
+
+// Auto-update Nassau overall when segment changes
+watch(nassauSegmentBet, (newVal) => {
+  if (nassauAutoDouble.value) {
+    nassauOverallBet.value = newVal * 2
+  }
+})
+
+watch(nassauAutoDouble, (enabled) => {
+  if (enabled) {
+    nassauOverallBet.value = nassauSegmentBet.value * 2
+  }
 })
 
 // Methods
@@ -191,6 +222,18 @@ function removeIndividualPayout(index) {
   }
 }
 
+function addCalcuttaPayout() {
+  const nextPlace = calcuttaPayouts.value.length + 1
+  calcuttaPayouts.value.push({ place: nextPlace, percent: 0 })
+}
+
+function removeCalcuttaPayout(index) {
+  if (calcuttaPayouts.value.length > 1) {
+    calcuttaPayouts.value.splice(index, 1)
+    calcuttaPayouts.value.forEach((p, i) => p.place = i + 1)
+  }
+}
+
 const totalPot = computed(() => validPlayers.value.length * entryFee.value)
 
 const totalPayouts = computed(() => {
@@ -221,7 +264,9 @@ async function startTournament() {
       course_id: selectedCourse.value?.id,
       course_name: selectedCourse.value?.name,
       slope_rating: courseStore.selectedCourse?.slope_rating || 113,
-      bet_amount: useCustomPayouts.value ? 0 : betAmount.value,
+      bet_amount: useCustomPayouts.value ? 0 : (gameType.value === 'nassau' ? nassauSegmentBet.value : betAmount.value),
+      nassau_segment_bet: gameType.value === 'nassau' ? nassauSegmentBet.value : null,
+      nassau_overall_bet: gameType.value === 'nassau' ? nassauOverallBet.value : null,
       greenie_amount: useCustomPayouts.value ? 0 : greenieAmount.value,
       skins_amount: gameType.value === 'skins' ? skinsAmount.value : 0,
       greenie_holes: selectedGreenieHoles.value.join(','),
@@ -235,6 +280,16 @@ async function startTournament() {
         name: player.name,
         handicap: player.handicap,
         team: isTeamGame.value ? player.team : null
+      })
+    }
+
+    // Save Calcutta config if enabled
+    if (enableCalcutta.value) {
+      await calcuttaStore.saveConfig(tournamentId, {
+        enabled: true,
+        payout_structure: calcuttaPayouts.value
+          .filter(p => p.percent > 0)
+          .map(p => ({ place: p.place, type: 'percent', value: p.percent }))
       })
     }
 
@@ -616,11 +671,83 @@ function getTeamColorClass(teamNum, type = 'bg') {
 
       <!-- Simple Bets Mode -->
       <div v-if="!useCustomPayouts" class="space-y-4">
-        <!-- Main Bet -->
-        <div class="card">
-          <label class="block text-sm text-gray-400 mb-2">
-            {{ gameType === 'nassau' ? `Nassau Bet (per ${nassauFormat === '6-6-6' ? '4 bets' : '3 bets'})` : 'Main Bet Amount' }}
-          </label>
+        <!-- Nassau Bet (special UI) -->
+        <div v-if="gameType === 'nassau'" class="card">
+          <label class="block font-semibold mb-3">Nassau Bet</label>
+
+          <!-- Segment Bet -->
+          <div class="mb-4">
+            <label class="block text-sm text-gray-400 mb-2">Per Segment</label>
+            <div class="flex items-center gap-2">
+              <span class="text-2xl">$</span>
+              <input
+                v-model.number="nassauSegmentBet"
+                type="number"
+                min="0"
+                class="flex-1 p-3 bg-gray-700 rounded-xl text-2xl font-bold focus:outline-none"
+              />
+            </div>
+            <div class="text-xs text-gray-500 mt-1">
+              {{ nassauFormat === '6-6-6' ? 'Front 6, Middle 6, Back 6' : 'Front 9, Back 9' }}
+            </div>
+          </div>
+
+          <!-- Overall Bet -->
+          <div class="mb-4">
+            <div class="flex items-center justify-between mb-2">
+              <label class="text-sm text-gray-400">Overall</label>
+              <label class="flex items-center gap-2 text-xs cursor-pointer">
+                <input type="checkbox" v-model="nassauAutoDouble" class="rounded">
+                <span class="text-gray-400">Auto 2x</span>
+              </label>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-2xl">$</span>
+              <input
+                v-model.number="nassauOverallBet"
+                type="number"
+                min="0"
+                :disabled="nassauAutoDouble"
+                :class="[
+                  'flex-1 p-3 rounded-xl text-2xl font-bold focus:outline-none',
+                  nassauAutoDouble ? 'bg-gray-800 text-gray-400' : 'bg-gray-700'
+                ]"
+              />
+            </div>
+          </div>
+
+          <!-- Breakdown -->
+          <div class="p-3 bg-gray-800 rounded-lg">
+            <div class="grid gap-1 text-sm" :class="nassauFormat === '6-6-6' ? 'grid-cols-4' : 'grid-cols-3'">
+              <div class="text-center">
+                <div class="text-xs text-gray-500">{{ nassauFormat === '6-6-6' ? 'Front 6' : 'Front 9' }}</div>
+                <div class="font-bold">${{ nassauSegmentBet }}</div>
+              </div>
+              <div v-if="nassauFormat === '6-6-6'" class="text-center">
+                <div class="text-xs text-gray-500">Mid 6</div>
+                <div class="font-bold">${{ nassauSegmentBet }}</div>
+              </div>
+              <div class="text-center">
+                <div class="text-xs text-gray-500">{{ nassauFormat === '6-6-6' ? 'Back 6' : 'Back 9' }}</div>
+                <div class="font-bold">${{ nassauSegmentBet }}</div>
+              </div>
+              <div class="text-center">
+                <div class="text-xs text-gray-500">Overall</div>
+                <div class="font-bold text-gold">${{ nassauOverallBet }}</div>
+              </div>
+            </div>
+            <div class="mt-3 pt-3 border-t border-gray-700 flex justify-between">
+              <span class="text-gray-400 text-sm">Max exposure:</span>
+              <span class="text-lg font-bold text-gold">
+                ${{ nassauSegmentBet * (nassauFormat === '6-6-6' ? 3 : 2) + nassauOverallBet }}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Main Bet (non-Nassau) -->
+        <div v-else class="card">
+          <label class="block text-sm text-gray-400 mb-2">Main Bet Amount</label>
           <div class="flex items-center gap-2">
             <span class="text-2xl">$</span>
             <input
@@ -629,9 +756,6 @@ function getTeamColorClass(teamNum, type = 'bg') {
               min="0"
               class="flex-1 p-3 bg-gray-700 rounded-xl text-2xl font-bold focus:outline-none"
             />
-          </div>
-          <div v-if="gameType === 'nassau'" class="mt-2 text-sm text-gray-400">
-            Total potential: ${{ betAmount * (nassauFormat === '6-6-6' ? 4 : 3) }} per person
           </div>
         </div>
 
@@ -684,7 +808,10 @@ function getTeamColorClass(teamNum, type = 'bg') {
           <div class="text-sm space-y-1 text-gray-400">
             <div>{{ gameInfo?.name }} {{ isTeamGame ? `(${numTeams} Teams)` : '(Individual)' }}</div>
             <div>{{ validPlayers.length }} players at {{ selectedCourse?.name }}</div>
-            <div v-if="betAmount">${{ betAmount }} main bet</div>
+            <div v-if="gameType === 'nassau'">
+              ${{ nassauSegmentBet }}/{{ nassauSegmentBet }}/{{ nassauFormat === '6-6-6' ? nassauSegmentBet + '/' : '' }}{{ nassauOverallBet }} Nassau
+            </div>
+            <div v-else-if="betAmount">${{ betAmount }} main bet</div>
             <div v-if="greenieAmount && selectedGreenieHoles.length">${{ greenieAmount }} greenies on {{ selectedGreenieHoles.length }} holes</div>
           </div>
         </div>
@@ -839,6 +966,119 @@ function getTeamColorClass(teamNum, type = 'bg') {
             </div>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- Step 6: Calcutta (Optional) -->
+    <div v-if="step === 6" class="animate-slide-up">
+      <h2 class="text-2xl font-bold mb-2">Calcutta Auction</h2>
+      <p class="text-gray-400 mb-6">Optional: Run a Calcutta auction on teams</p>
+
+      <!-- Enable Toggle -->
+      <div class="card mb-4">
+        <div class="flex items-center justify-between">
+          <div>
+            <div class="font-semibold">Enable Calcutta?</div>
+            <div class="text-sm text-gray-400">Auction off teams to the highest bidder</div>
+          </div>
+          <button
+            @click="enableCalcutta = !enableCalcutta"
+            :class="[
+              'w-14 h-8 rounded-full transition-colors relative',
+              enableCalcutta ? 'bg-yellow-500' : 'bg-gray-600'
+            ]"
+          >
+            <span
+              :class="[
+                'absolute top-1 left-1 w-6 h-6 bg-white rounded-full transition-all duration-200',
+                enableCalcutta ? 'translate-x-6' : 'translate-x-0'
+              ]"
+            ></span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Calcutta Setup -->
+      <div v-if="enableCalcutta" class="space-y-4">
+        <!-- How it works -->
+        <div class="card bg-yellow-500/10 border border-yellow-500/30">
+          <div class="flex items-start gap-3">
+            <span class="text-2xl">🏆</span>
+            <div>
+              <div class="font-semibold text-yellow-400 mb-1">How it works</div>
+              <p class="text-sm text-gray-300">
+                Each {{ isTeamGame ? 'team' : 'player' }} is auctioned off before the round.
+                The pot is distributed to owners based on final standings.
+                You'll run the auction during the round - we'll track bids and calculate payouts.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Payout Structure -->
+        <div class="card">
+          <div class="flex items-center justify-between mb-3">
+            <label class="font-semibold">Payout Structure</label>
+            <button @click="addCalcuttaPayout" class="text-sm text-yellow-400 hover:text-yellow-300">
+              + Add Place
+            </button>
+          </div>
+          <div class="space-y-2">
+            <div v-for="(payout, index) in calcuttaPayouts" :key="index" class="flex items-center gap-2">
+              <span class="w-16 text-gray-400 text-sm">{{ getOrdinal(payout.place) }}</span>
+              <input
+                v-model.number="payout.percent"
+                type="number"
+                min="0"
+                max="100"
+                class="flex-1 p-2 bg-gray-700 rounded-lg font-bold focus:outline-none text-center"
+              />
+              <span class="text-gray-400">%</span>
+              <button
+                v-if="calcuttaPayouts.length > 1"
+                @click="removeCalcuttaPayout(index)"
+                class="p-1 text-red-400 hover:text-red-300"
+              >
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Total validation -->
+          <div class="mt-3 pt-3 border-t border-gray-700 flex justify-between">
+            <span class="text-gray-400">Total</span>
+            <span :class="[
+              'font-bold',
+              calcuttaTotalPercent === 100 ? 'text-golf-green' : 'text-red-400'
+            ]">
+              {{ calcuttaTotalPercent }}%
+            </span>
+          </div>
+          <div v-if="calcuttaTotalPercent !== 100" class="text-xs text-red-400 mt-1">
+            Payouts should total 100%
+          </div>
+        </div>
+
+        <!-- Example -->
+        <div class="card bg-gray-900">
+          <div class="font-semibold mb-2">Example</div>
+          <div class="text-sm text-gray-400 space-y-1">
+            <p>If total auction pot is $400:</p>
+            <div v-for="payout in calcuttaPayouts.filter(p => p.percent > 0)" :key="payout.place" class="flex justify-between pl-4">
+              <span>{{ getOrdinal(payout.place) }} Place</span>
+              <span class="text-yellow-400">${{ Math.round(400 * payout.percent / 100) }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Skip message when disabled -->
+      <div v-else class="card bg-gray-900 text-center py-8">
+        <div class="text-4xl mb-3">🎯</div>
+        <div class="text-gray-400">No Calcutta for this round</div>
+        <div class="text-sm text-gray-500 mt-1">You can always set it up later during the round</div>
       </div>
     </div>
 

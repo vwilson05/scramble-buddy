@@ -80,6 +80,8 @@ router.post('/', (req, res) => {
       course_name,
       slope_rating,
       bet_amount,
+      nassau_segment_bet,
+      nassau_overall_bet,
       greenie_amount,
       skins_amount,
       greenie_holes,
@@ -94,8 +96,8 @@ router.post('/', (req, res) => {
     const selfieHole = Math.floor(Math.random() * 12) + 4
 
     const result = db.prepare(`
-      INSERT INTO tournaments (name, date, game_type, course_id, course_name, slope_rating, bet_amount, greenie_amount, skins_amount, greenie_holes, nassau_format, is_team_game, payout_config, slug, selfie_hole)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO tournaments (name, date, game_type, course_id, course_name, slope_rating, bet_amount, nassau_segment_bet, nassau_overall_bet, greenie_amount, skins_amount, greenie_holes, nassau_format, is_team_game, payout_config, slug, selfie_hole)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       name,
       date || new Date().toISOString().split('T')[0],
@@ -104,6 +106,8 @@ router.post('/', (req, res) => {
       course_name || null,
       slope_rating || 113,
       bet_amount || 0,
+      nassau_segment_bet || null,
+      nassau_overall_bet || null,
       greenie_amount || 0,
       skins_amount || 0,
       greenie_holes || null,

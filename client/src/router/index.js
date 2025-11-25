@@ -31,6 +31,16 @@ const routes = [
     path: '/tournament/:id/results',
     name: 'Results',
     component: () => import('../views/Results.vue')
+  },
+  {
+    path: '/multiday/setup',
+    name: 'MultiDaySetup',
+    component: () => import('../views/MultiDaySetup.vue')
+  },
+  {
+    path: '/multiday/:id',
+    name: 'MultiDayDashboard',
+    component: () => import('../views/MultiDayDashboard.vue')
   }
 ]
 

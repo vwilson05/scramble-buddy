@@ -2,12 +2,14 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useTournamentStore } from '../stores/tournament'
+import { useCalcuttaStore } from '../stores/calcutta'
 import { downloadResultsPDF, getResultsPDFBase64 } from '../utils/pdfGenerator'
 import axios from 'axios'
 
 const route = useRoute()
 const router = useRouter()
 const store = useTournamentStore()
+const calcuttaStore = useCalcuttaStore()
 
 const tournamentId = computed(() => route.params.id)
 const leaderboardData = ref(null)
@@ -22,9 +24,34 @@ onMounted(async () => {
   await store.fetchTournament(tournamentId.value)
   leaderboardData.value = await store.fetchLeaderboard(tournamentId.value)
 
+  // Fetch Calcutta results
+  await calcuttaStore.fetchCalcutta(tournamentId.value)
+  if (calcuttaStore.config?.enabled) {
+    await calcuttaStore.fetchResults(tournamentId.value)
+  }
+
   // Show confetti animation
   setTimeout(() => { showConfetti.value = true }, 500)
 })
+
+const calcuttaEnabled = computed(() => calcuttaStore.config?.enabled)
+const calcuttaResults = computed(() => calcuttaStore.results)
+
+function formatMoney(amount) {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0
+  }).format(amount)
+}
+
+function getPlaceSuffix(place) {
+  if (place === 1) return 'st'
+  if (place === 2) return 'nd'
+  if (place === 3) return 'rd'
+  return 'th'
+}
 
 const winner = computed(() => {
   return leaderboardData.value?.leaderboard?.[0]
@@ -236,6 +263,50 @@ function goHome() {
           </div>
           <div class="text-golf-green font-bold">
             {{ entry.greeniesWon }} greenie{{ entry.greeniesWon > 1 ? 's' : '' }}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Calcutta Results -->
+    <div v-if="calcuttaEnabled && calcuttaResults?.payouts?.length" class="mb-8">
+      <h2 class="text-xl font-bold mb-4 text-yellow-400">Calcutta Results</h2>
+      <div class="card border-yellow-400/30 mb-4">
+        <div class="text-center mb-4">
+          <div class="text-sm text-gray-400">Total Pot</div>
+          <div class="text-3xl font-bold text-yellow-400">{{ formatMoney(calcuttaResults.totalPot) }}</div>
+        </div>
+      </div>
+
+      <div class="space-y-2">
+        <div
+          v-for="result in calcuttaResults.payouts"
+          :key="result.teamNumber"
+          class="card flex items-center gap-4"
+          :class="{ 'border-yellow-400/50': result.payout > 0 }"
+        >
+          <div :class="[
+            'w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm',
+            result.place === 1 ? 'bg-yellow-400 text-dark' :
+            result.place === 2 ? 'bg-gray-400 text-dark' :
+            result.place === 3 ? 'bg-orange-600 text-white' :
+            'bg-gray-700'
+          ]">
+            {{ result.place }}{{ getPlaceSuffix(result.place) }}
+          </div>
+          <div class="flex-1">
+            <div class="font-semibold">{{ result.teamName }}</div>
+            <div class="text-xs text-gray-400">
+              Bought by <span class="text-white">{{ result.buyerName }}</span> for {{ formatMoney(result.purchaseAmount) }}
+            </div>
+          </div>
+          <div class="text-right">
+            <div v-if="result.payout > 0" class="font-bold text-lg text-yellow-400">
+              {{ formatMoney(result.payout) }}
+            </div>
+            <div :class="['text-sm', result.profit > 0 ? 'text-golf-green' : result.profit < 0 ? 'text-red-400' : 'text-gray-400']">
+              {{ result.profit >= 0 ? '+' : '' }}{{ formatMoney(result.profit) }}
+            </div>
           </div>
         </div>
       </div>

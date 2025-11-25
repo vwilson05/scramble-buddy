@@ -12,9 +12,11 @@ function calculateCourseHandicap(handicapIndex, slopeRating = 113) {
 
 /**
  * Get strokes received on a hole
+ * Note: No strokes given on par 3s (common rule)
  */
-function getStrokesOnHole(courseHandicap, holeHandicapRating) {
+function getStrokesOnHole(courseHandicap, holeHandicapRating, holePar) {
   if (courseHandicap <= 0) return 0
+  if (holePar === 3) return 0 // No strokes on par 3s
   const fullStrokes = Math.floor(courseHandicap / 18)
   const remainingStrokes = courseHandicap % 18
   return fullStrokes + (holeHandicapRating <= remainingStrokes ? 1 : 0)
@@ -23,8 +25,8 @@ function getStrokesOnHole(courseHandicap, holeHandicapRating) {
 /**
  * Calculate net score for a hole
  */
-function calculateNetScore(grossScore, courseHandicap, holeHandicapRating) {
-  return grossScore - getStrokesOnHole(courseHandicap, holeHandicapRating)
+function calculateNetScore(grossScore, courseHandicap, holeHandicapRating, holePar) {
+  return grossScore - getStrokesOnHole(courseHandicap, holeHandicapRating, holePar)
 }
 
 /**
@@ -70,7 +72,7 @@ export function calculateLeaderboard(tournament, players, scores, holes) {
 
       if (score && score.strokes && hole) {
         const gross = score.strokes
-        const net = calculateNetScore(gross, courseHandicap, hole.handicap_rating)
+        const net = calculateNetScore(gross, courseHandicap, hole.handicap_rating, hole.par)
         const diff = gross - hole.par
 
         grossTotal += gross
@@ -102,7 +104,7 @@ export function calculateLeaderboard(tournament, players, scores, holes) {
           gross,
           net,
           par: hole.par,
-          strokes: getStrokesOnHole(courseHandicap, hole.handicap_rating),
+          strokes: getStrokesOnHole(courseHandicap, hole.handicap_rating, hole.par),
           greenie: score.greenie,
           greenieDistance: score.greenie_distance
         })
@@ -112,7 +114,7 @@ export function calculateLeaderboard(tournament, players, scores, holes) {
           gross: null,
           net: null,
           par: hole?.par || 4,
-          strokes: hole ? getStrokesOnHole(courseHandicap, hole.handicap_rating) : 0
+          strokes: hole ? getStrokesOnHole(courseHandicap, hole.handicap_rating, hole.par) : 0
         })
       }
     }

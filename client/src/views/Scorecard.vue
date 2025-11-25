@@ -5,6 +5,8 @@ import { useTournamentStore } from '../stores/tournament'
 import { useCourseStore } from '../stores/course'
 import { getScoreLabel } from '../utils/scoring'
 import SideBetManager from '../components/SideBetManager.vue'
+import CalcuttaManager from '../components/CalcuttaManager.vue'
+import BetTracker from '../components/BetTracker.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -20,10 +22,16 @@ const showScoreAnimation = ref(false)
 const lastScoreLabel = ref(null)
 const showShareToast = ref(false)
 const showSideBets = ref(false)
+const showCalcutta = ref(false)
+const showBetTracker = ref(false)
 const showSelfieReminder = ref(false)
 const selfieReminderShown = ref(false)
 const showSideBetPrompt = ref(false)
 const sideBetPromptShown = ref(false)
+const showAdjustiesModal = ref(false)
+const adjustiesShownHole7 = ref(false)
+const adjustiesShownHole13 = ref(false)
+const playerHandicapAdjustments = ref({}) // { playerId: newHandicap }
 
 // Polling interval for live updates
 let pollInterval = null
@@ -64,11 +72,27 @@ const isGreenieHole = computed(() => {
 
 const selfieHole = computed(() => store.currentTournament?.selfie_hole)
 
-// Watch for selfie hole
+// Watch for selfie hole and adjusties checkpoints
 watch(currentHole, (hole) => {
   if (hole === selfieHole.value && !selfieReminderShown.value) {
     showSelfieReminder.value = true
     selfieReminderShown.value = true
+  }
+
+  // Adjusties checkpoints at holes 7 and 13
+  if (hole === 7 && !adjustiesShownHole7.value && store.players.length >= 2) {
+    // Initialize adjustments with current handicaps
+    store.players.forEach(p => {
+      if (playerHandicapAdjustments.value[p.id] === undefined) {
+        playerHandicapAdjustments.value[p.id] = p.handicap
+      }
+    })
+    showAdjustiesModal.value = true
+    adjustiesShownHole7.value = true
+  }
+  if (hole === 13 && !adjustiesShownHole13.value && store.players.length >= 2) {
+    showAdjustiesModal.value = true
+    adjustiesShownHole13.value = true
   }
 })
 
@@ -124,7 +148,7 @@ async function submitScore(strokes) {
   }
 
   await store.submitScore({
-    tournament_id: tournamentId.value,
+    tournament_id: store.currentTournament.id,
     player_id: selectedPlayer.value.id,
     hole_number: currentHole.value,
     strokes,
@@ -141,7 +165,7 @@ async function submitGreenie() {
   if (!selectedPlayer.value) return
 
   await store.submitScore({
-    tournament_id: tournamentId.value,
+    tournament_id: store.currentTournament.id,
     player_id: selectedPlayer.value.id,
     hole_number: currentHole.value,
     strokes: playerScoreForHole.value?.strokes,
@@ -156,6 +180,26 @@ async function submitGreenie() {
 function skipGreenie() {
   showGreenieModal.value = false
   greenieDistance.value = ''
+}
+
+async function applyAdjusties() {
+  // Update each player's handicap
+  for (const player of store.players) {
+    const newHandicap = playerHandicapAdjustments.value[player.id]
+    if (newHandicap !== undefined && newHandicap !== player.handicap) {
+      await store.updatePlayer(player.id, { handicap: newHandicap })
+    }
+  }
+  showAdjustiesModal.value = false
+}
+
+function skipAdjusties() {
+  showAdjustiesModal.value = false
+}
+
+function adjustHandicap(playerId, delta) {
+  const current = playerHandicapAdjustments.value[playerId] || 0
+  playerHandicapAdjustments.value[playerId] = Math.max(0, current + delta)
 }
 
 function getScoreClass(strokes) {
@@ -218,9 +262,19 @@ async function shareLink() {
           <div class="text-xs text-gray-400">{{ store.currentTournament?.course_name }}</div>
         </div>
         <div class="flex items-center gap-2">
+          <button @click="showBetTracker = true" class="text-orange-400 p-1" title="Bet Tracker">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+          </button>
           <button @click="showSideBets = true" class="text-green-400 p-1" title="Side Bets">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+          </button>
+          <button @click="showCalcutta = true" class="text-yellow-400 p-1" title="Calcutta">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
             </svg>
           </button>
           <button @click="shareLink" class="text-gold p-1" title="Share link">
@@ -399,6 +453,30 @@ async function shareLink() {
       />
     </div>
 
+    <!-- Calcutta Modal -->
+    <div v-if="showCalcutta" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-2">
+      <div class="card max-w-lg w-full max-h-[90vh] overflow-y-auto">
+        <div class="flex items-center justify-between mb-4 sticky top-0 bg-gray-800 py-2 -mt-2 -mx-2 px-2">
+          <h3 class="text-xl font-bold">Calcutta Auction</h3>
+          <button @click="showCalcutta = false" class="text-gray-400 hover:text-white">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <CalcuttaManager :tournament-id="tournamentId" />
+      </div>
+    </div>
+
+    <!-- Bet Tracker Modal -->
+    <div v-if="showBetTracker" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <BetTracker
+        :tournament-id="tournamentId"
+        :current-hole="currentHole"
+        @close="showBetTracker = false"
+      />
+    </div>
+
     <!-- Selfie Reminder Modal -->
     <div v-if="showSelfieReminder" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
       <div class="card max-w-sm w-full animate-slide-up text-center">
@@ -432,6 +510,70 @@ async function shareLink() {
       </div>
     </div>
 
+    <!-- Adjusties Modal (Holes 7 and 13) -->
+    <div v-if="showAdjustiesModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <div class="card max-w-md w-full animate-slide-up">
+        <div class="flex items-center gap-3 mb-4">
+          <span class="text-3xl">⚖️</span>
+          <div>
+            <h3 class="text-xl font-bold">Adjusties Check-in</h3>
+            <p class="text-sm text-gray-400">Hole {{ currentHole }} - Adjust handicaps?</p>
+          </div>
+        </div>
+
+        <p class="text-gray-400 text-sm mb-4">
+          If someone's dominating, you can adjust strokes for the remaining holes to keep it fair.
+        </p>
+
+        <div class="space-y-3 mb-6">
+          <div
+            v-for="player in store.players"
+            :key="player.id"
+            class="flex items-center justify-between p-3 bg-gray-800 rounded-xl"
+          >
+            <div>
+              <div class="font-semibold">{{ player.name }}</div>
+              <div class="text-xs text-gray-400">
+                Original: {{ player.handicap }} HCP
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <button
+                @click="adjustHandicap(player.id, -1)"
+                class="w-8 h-8 rounded-full bg-red-500/20 text-red-400 flex items-center justify-center hover:bg-red-500/30"
+              >
+                -
+              </button>
+              <div class="w-12 text-center">
+                <span class="text-xl font-bold" :class="playerHandicapAdjustments[player.id] !== player.handicap ? 'text-golf-green' : ''">
+                  {{ playerHandicapAdjustments[player.id] ?? player.handicap }}
+                </span>
+              </div>
+              <button
+                @click="adjustHandicap(player.id, 1)"
+                class="w-8 h-8 rounded-full bg-green-500/20 text-green-400 flex items-center justify-center hover:bg-green-500/30"
+              >
+                +
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="text-xs text-gray-500 mb-4">
+          Adjustments will apply to all remaining holes ({{ 19 - currentHole }} holes left).
+        </div>
+
+        <div class="flex gap-3">
+          <button @click="skipAdjusties" class="flex-1 btn-secondary">
+            Keep Current
+          </button>
+          <button @click="applyAdjusties" class="flex-1 btn-gold">
+            Apply Changes
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Bottom Navigation -->
     <div class="fixed bottom-0 left-0 right-0 bg-dark border-t border-gray-800 p-4">
       <div class="flex justify-around max-w-md mx-auto">
@@ -454,7 +596,7 @@ async function shareLink() {
           <span class="text-xs mt-1">Leaderboard</span>
         </button>
         <button
-          @click="router.push(`/tournament/${tournamentId}/results`)"
+          @click="showBetTracker = true"
           class="flex flex-col items-center text-gray-400"
         >
           <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">

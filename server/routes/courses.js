@@ -26,7 +26,9 @@ router.get('/search', async (req, res) => {
     )
 
     if (!response.ok) {
-      throw new Error('Failed to fetch courses')
+      // API unavailable - return empty results, user can enter course manually
+      console.log('Golf API unavailable, returning empty results')
+      return res.json([])
     }
 
     const data = await response.json()
