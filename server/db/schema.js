@@ -38,8 +38,13 @@ export function initializeDatabase(db) {
   } catch (e) { /* column already exists */ }
 
   try {
-    db.exec(`ALTER TABLE tournaments ADD COLUMN slug TEXT UNIQUE`)
+    db.exec(`ALTER TABLE tournaments ADD COLUMN slug TEXT`)
   } catch (e) { /* column already exists */ }
+
+  // Create index for slug lookups (SQLite can't add UNIQUE constraint via ALTER)
+  try {
+    db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_tournaments_slug ON tournaments(slug)`)
+  } catch (e) { /* index may already exist */ }
 
   // Add selfie_hole column for random selfie reminder
   try {
