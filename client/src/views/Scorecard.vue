@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useTournamentStore } from '../stores/tournament'
 import { useCourseStore } from '../stores/course'
 import { getScoreLabel } from '../utils/scoring'
+import SideBetManager from '../components/SideBetManager.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -18,6 +19,9 @@ const greenieDistance = ref('')
 const showScoreAnimation = ref(false)
 const lastScoreLabel = ref(null)
 const showShareToast = ref(false)
+const showSideBets = ref(false)
+const showSelfieReminder = ref(false)
+const selfieReminderShown = ref(false)
 
 // Polling interval for live updates
 let pollInterval = null
@@ -46,6 +50,16 @@ const currentHoleData = computed(() => {
 
 const isGreenieHole = computed(() => {
   return store.greenieHoles.includes(currentHole.value)
+})
+
+const selfieHole = computed(() => store.currentTournament?.selfie_hole)
+
+// Watch for selfie hole
+watch(currentHole, (hole) => {
+  if (hole === selfieHole.value && !selfieReminderShown.value) {
+    showSelfieReminder.value = true
+    selfieReminderShown.value = true
+  }
 })
 
 const playerScoreForHole = computed(() => {
@@ -194,6 +208,11 @@ async function shareLink() {
           <div class="text-xs text-gray-400">{{ store.currentTournament?.course_name }}</div>
         </div>
         <div class="flex items-center gap-2">
+          <button @click="showSideBets = true" class="text-green-400 p-1" title="Side Bets">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+          </button>
           <button @click="shareLink" class="text-gold p-1" title="Share link">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
@@ -358,6 +377,29 @@ async function shareLink() {
             Greenie!
           </button>
         </div>
+      </div>
+    </div>
+
+    <!-- Side Bets Modal -->
+    <div v-if="showSideBets" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <SideBetManager
+        :tournament-id="tournamentId"
+        :current-hole="currentHole"
+        @close="showSideBets = false"
+      />
+    </div>
+
+    <!-- Selfie Reminder Modal -->
+    <div v-if="showSelfieReminder" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <div class="card max-w-sm w-full animate-slide-up text-center">
+        <div class="text-6xl mb-4">📸</div>
+        <h3 class="text-2xl font-bold mb-2">Selfie Time!</h3>
+        <p class="text-gray-400 mb-6">
+          Don't forget to grab a group photo on hole {{ selfieHole }}!
+        </p>
+        <button @click="showSelfieReminder = false" class="btn-gold w-full">
+          Got it!
+        </button>
       </div>
     </div>
 

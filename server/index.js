@@ -9,6 +9,7 @@ import playerRoutes from './routes/players.js'
 import scoreRoutes from './routes/scores.js'
 import courseRoutes from './routes/courses.js'
 import emailRoutes from './routes/email.js'
+import sideBetRoutes from './routes/sidebets.js'
 
 dotenv.config()
 
@@ -27,6 +28,7 @@ app.use('/api/players', playerRoutes)
 app.use('/api/scores', scoreRoutes)
 app.use('/api/courses', courseRoutes)
 app.use('/api/email', emailRoutes)
+app.use('/api/sidebets', sideBetRoutes)
 
 // Health check
 app.get('/api/health', (req, res) => {

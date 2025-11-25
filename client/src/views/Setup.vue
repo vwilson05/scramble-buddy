@@ -426,6 +426,14 @@ function getTeamColorClass(teamNum, type = 'bg') {
       <h2 class="text-2xl font-bold mb-2">Who's playing?</h2>
       <p class="text-gray-400 mb-6">Add all players with their handicaps</p>
 
+      <!-- Column Headers -->
+      <div class="flex gap-2 items-center mb-2 px-1">
+        <div class="w-8 shrink-0"></div>
+        <div class="flex-1 text-sm text-gray-400">Player Name</div>
+        <div class="w-16 text-sm text-gray-400 text-center">Handicap</div>
+        <div class="w-9 shrink-0"></div>
+      </div>
+
       <div class="space-y-3 mb-4">
         <div v-for="(player, index) in players" :key="index" class="flex gap-2 items-center">
           <div class="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center text-sm font-bold shrink-0">
@@ -440,9 +448,10 @@ function getTeamColorClass(teamNum, type = 'bg') {
           <input
             v-model.number="player.handicap"
             type="number"
-            placeholder="HCP"
+            placeholder="0"
             min="0"
             max="54"
+            title="Player handicap index (0-54)"
             class="w-16 p-3 bg-gray-800 border border-gray-700 rounded-xl focus:border-golf-green focus:outline-none text-center"
           />
           <button
@@ -454,6 +463,7 @@ function getTeamColorClass(teamNum, type = 'bg') {
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
+          <div v-else class="w-9 shrink-0"></div>
         </div>
       </div>
 

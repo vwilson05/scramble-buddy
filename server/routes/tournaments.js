@@ -90,9 +90,12 @@ router.post('/', (req, res) => {
 
     const slug = generateSlug(name || 'round')
 
+    // Generate random selfie hole between 4 and 15 (avoid first/last few holes)
+    const selfieHole = Math.floor(Math.random() * 12) + 4
+
     const result = db.prepare(`
-      INSERT INTO tournaments (name, date, game_type, course_id, course_name, slope_rating, bet_amount, greenie_amount, skins_amount, greenie_holes, nassau_format, is_team_game, payout_config, slug)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO tournaments (name, date, game_type, course_id, course_name, slope_rating, bet_amount, greenie_amount, skins_amount, greenie_holes, nassau_format, is_team_game, payout_config, slug, selfie_hole)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       name,
       date || new Date().toISOString().split('T')[0],
@@ -107,7 +110,8 @@ router.post('/', (req, res) => {
       nassau_format || '6-6-6',
       is_team_game || 0,
       payout_config ? JSON.stringify(payout_config) : null,
-      slug
+      slug,
+      selfieHole
     )
 
     res.status(201).json({ id: result.lastInsertRowid, slug })

@@ -41,6 +41,45 @@ export function initializeDatabase(db) {
     db.exec(`ALTER TABLE tournaments ADD COLUMN slug TEXT UNIQUE`)
   } catch (e) { /* column already exists */ }
 
+  // Add selfie_hole column for random selfie reminder
+  try {
+    db.exec(`ALTER TABLE tournaments ADD COLUMN selfie_hole INTEGER`)
+  } catch (e) { /* column already exists */ }
+
+  // Side bets table (Nassau-style bets between 2 players or 2 teams)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS side_bets (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tournament_id INTEGER NOT NULL,
+      bet_type TEXT NOT NULL, -- 'player' or 'team'
+      party1_id INTEGER NOT NULL, -- player_id or team number
+      party2_id INTEGER NOT NULL, -- player_id or team number
+      party1_name TEXT,
+      party2_name TEXT,
+      front_amount REAL DEFAULT 0,
+      back_amount REAL DEFAULT 0,
+      overall_amount REAL DEFAULT 0,
+      auto_press INTEGER DEFAULT 0, -- auto-press when down by X holes (0 = manual only)
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (tournament_id) REFERENCES tournaments(id) ON DELETE CASCADE
+    )
+  `)
+
+  // Bet presses table (tracks each press and its status)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS bet_presses (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      side_bet_id INTEGER NOT NULL,
+      segment TEXT NOT NULL, -- 'front', 'back', 'overall'
+      start_hole INTEGER NOT NULL, -- hole where press starts
+      amount REAL NOT NULL,
+      parent_press_id INTEGER, -- null for original bet, otherwise points to pressed bet
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (side_bet_id) REFERENCES side_bets(id) ON DELETE CASCADE,
+      FOREIGN KEY (parent_press_id) REFERENCES bet_presses(id) ON DELETE CASCADE
+    )
+  `)
+
   // Players table
   db.exec(`
     CREATE TABLE IF NOT EXISTS players (
