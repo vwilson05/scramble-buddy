@@ -122,6 +122,17 @@ const toPar = computed(() => {
   return diff === 0 ? 'E' : diff > 0 ? `+${diff}` : `${diff}`
 })
 
+const selectedPlayerTee = computed(() => {
+  const tee = selectedPlayer.value?.tee_color || 'white'
+  return tee.charAt(0).toUpperCase() + tee.slice(1)
+})
+
+const currentHoleYardage = computed(() => {
+  const tee = selectedPlayer.value?.tee_color || 'white'
+  const yardageKey = `yardage_${tee}`
+  return currentHoleData.value[yardageKey] || currentHoleData.value.yardage_white || null
+})
+
 // Methods
 function goToHole(hole) {
   currentHole.value = hole
@@ -363,12 +374,32 @@ async function shareLink() {
           </svg>
         </button>
 
-        <div>
+        <div class="flex-1">
           <div class="text-5xl font-bold">Hole {{ currentHole }}</div>
-          <div class="flex items-center justify-center gap-4 mt-2">
-            <span class="text-xl">Par {{ currentHoleData.par }}</span>
-            <span class="text-gray-400">{{ currentHoleData.yardage_white || '---' }} yds</span>
-            <span v-if="isGreenieHole" class="text-golf-green text-sm font-semibold">GREENIE</span>
+
+          <!-- Hole Info Card -->
+          <div class="mt-3 bg-gray-800 rounded-xl p-3 inline-block min-w-[200px]">
+            <div class="flex items-center justify-center gap-6">
+              <!-- Par -->
+              <div class="text-center">
+                <div class="text-xs text-gray-500 uppercase">Par</div>
+                <div class="text-2xl font-bold">{{ currentHoleData.par }}</div>
+              </div>
+              <!-- Yardage -->
+              <div class="text-center">
+                <div class="text-xs text-gray-500 uppercase">{{ selectedPlayerTee }}</div>
+                <div class="text-2xl font-bold">{{ currentHoleYardage || '---' }}</div>
+              </div>
+              <!-- Handicap -->
+              <div class="text-center">
+                <div class="text-xs text-gray-500 uppercase">HCP</div>
+                <div class="text-2xl font-bold text-gray-400">{{ currentHoleData.handicap_rating || '—' }}</div>
+              </div>
+            </div>
+            <!-- Greenie indicator -->
+            <div v-if="isGreenieHole" class="mt-2 pt-2 border-t border-gray-700">
+              <span class="text-golf-green text-sm font-semibold">🎯 GREENIE HOLE</span>
+            </div>
           </div>
         </div>
 
