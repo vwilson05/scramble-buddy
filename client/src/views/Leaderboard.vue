@@ -461,30 +461,35 @@ function getHolePars() {
 
 /* PGA-style score symbols */
 .score-eagle {
-  @apply text-yellow-400 font-bold;
+  color: #facc15;
+  font-weight: 700;
   border-radius: 50%;
   border: 2px solid #facc15;
   box-shadow: 0 0 0 2px #1f2937, 0 0 0 4px #facc15;
 }
 
 .score-birdie {
-  @apply text-green-400 font-bold;
+  color: #4ade80;
+  font-weight: 700;
   border-radius: 50%;
   border: 2px solid #4ade80;
 }
 
 .score-par {
-  @apply text-white font-bold;
+  color: #ffffff;
+  font-weight: 700;
 }
 
 .score-bogey {
-  @apply text-orange-400 font-bold;
+  color: #fb923c;
+  font-weight: 700;
   border-radius: 2px;
   border: 2px solid #fb923c;
 }
 
 .score-double {
-  @apply text-red-400 font-bold;
+  color: #f87171;
+  font-weight: 700;
   border-radius: 2px;
   border: 2px solid #f87171;
   box-shadow: 0 0 0 2px #1f2937, 0 0 0 4px #f87171;
