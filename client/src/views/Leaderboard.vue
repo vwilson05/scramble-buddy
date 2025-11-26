@@ -211,10 +211,10 @@ function getHolePars() {
               <div class="flex gap-1 mt-1">
                 <div class="flex-1 text-center text-xs text-gray-400">Par</div>
                 <div v-for="hole in 9" :key="'par-' + hole" class="w-7 text-center text-xs text-gray-400">
-                  {{ courseStore.holes[hole - 1]?.par || 4 }}
+                  {{ entry.holeScores[hole - 1]?.par || 4 }}
                 </div>
                 <div class="w-10 text-center text-xs text-gray-400 font-semibold">
-                  {{ courseStore.holes.slice(0, 9).reduce((s, h) => s + h.par, 0) }}
+                  {{ entry.holeScores.slice(0, 9).reduce((s, h) => s + (h.par || 4), 0) }}
                 </div>
               </div>
               <div class="flex gap-1 mt-1">
@@ -222,7 +222,7 @@ function getHolePars() {
                 <div
                   v-for="hole in 9"
                   :key="'score-' + hole"
-                  :class="['w-7 h-7 text-center text-sm font-bold rounded flex items-center justify-center', getScoreClass(entry.holeScores[hole - 1]?.gross, courseStore.holes[hole - 1]?.par || 4)]"
+                  :class="['w-7 h-7 text-center text-sm font-bold rounded flex items-center justify-center', getScoreClass(entry.holeScores[hole - 1]?.gross, entry.holeScores[hole - 1]?.par || 4)]"
                 >
                   {{ entry.holeScores[hole - 1]?.gross || '-' }}
                 </div>
@@ -257,10 +257,10 @@ function getHolePars() {
               <div class="flex gap-1 mt-1">
                 <div class="flex-1 text-center text-xs text-gray-400">Par</div>
                 <div v-for="hole in 9" :key="'par-' + (hole + 9)" class="w-7 text-center text-xs text-gray-400">
-                  {{ courseStore.holes[hole + 8]?.par || 4 }}
+                  {{ entry.holeScores[hole + 8]?.par || 4 }}
                 </div>
                 <div class="w-10 text-center text-xs text-gray-400 font-semibold">
-                  {{ courseStore.holes.slice(9, 18).reduce((s, h) => s + h.par, 0) }}
+                  {{ entry.holeScores.slice(9, 18).reduce((s, h) => s + (h.par || 4), 0) }}
                 </div>
               </div>
               <div class="flex gap-1 mt-1">
@@ -268,7 +268,7 @@ function getHolePars() {
                 <div
                   v-for="hole in 9"
                   :key="'score-' + (hole + 9)"
-                  :class="['w-7 h-7 text-center text-sm font-bold rounded flex items-center justify-center', getScoreClass(entry.holeScores[hole + 8]?.gross, courseStore.holes[hole + 8]?.par || 4)]"
+                  :class="['w-7 h-7 text-center text-sm font-bold rounded flex items-center justify-center', getScoreClass(entry.holeScores[hole + 8]?.gross, entry.holeScores[hole + 8]?.par || 4)]"
                 >
                   {{ entry.holeScores[hole + 8]?.gross || '-' }}
                 </div>
@@ -311,16 +311,22 @@ function getHolePars() {
         </Transition>
 
         <!-- Stats Bar -->
-        <div v-if="entry.stats && expandedPlayer !== entry.player?.id" class="flex gap-4 mt-3 pt-3 border-t border-gray-700/50 text-xs">
+        <div v-if="entry.stats && expandedPlayer !== entry.player?.id" class="flex flex-wrap gap-x-4 gap-y-1 mt-3 pt-3 border-t border-gray-700/50 text-xs">
           <div v-if="entry.stats.birdies" class="text-golf-green">
-            {{ entry.stats.birdies }} birdies
+            {{ entry.stats.birdies }} {{ entry.stats.birdies === 1 ? 'birdie' : 'birdies' }}
           </div>
-          <div class="text-gray-400">{{ entry.stats.pars }} pars</div>
+          <div class="text-gray-400">{{ entry.stats.pars }} {{ entry.stats.pars === 1 ? 'par' : 'pars' }}</div>
           <div v-if="entry.stats.bogeys" class="text-orange-400">
-            {{ entry.stats.bogeys }} bogeys
+            {{ entry.stats.bogeys }} {{ entry.stats.bogeys === 1 ? 'bogey' : 'bogeys' }}
+          </div>
+          <div v-if="entry.stats.doubles" class="text-red-400">
+            {{ entry.stats.doubles }} {{ entry.stats.doubles === 1 ? 'double' : 'doubles' }}
+          </div>
+          <div v-if="entry.stats.others" class="text-red-500">
+            {{ entry.stats.others }} {{ entry.stats.others === 1 ? 'other' : 'others' }}
           </div>
           <div v-if="entry.greeniesWon" class="text-gold">
-            {{ entry.greeniesWon }} greenies
+            {{ entry.greeniesWon }} {{ entry.greeniesWon === 1 ? 'greenie' : 'greenies' }}
           </div>
         </div>
 
