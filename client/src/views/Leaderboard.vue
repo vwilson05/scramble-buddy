@@ -77,11 +77,11 @@ function toggleScorecard(playerId) {
 function getScoreClass(strokes, par) {
   if (!strokes) return 'text-gray-500'
   const diff = strokes - par
-  if (diff <= -2) return 'bg-yellow-500 text-dark' // Eagle or better
-  if (diff === -1) return 'bg-golf-green text-white' // Birdie
-  if (diff === 0) return 'text-white' // Par
-  if (diff === 1) return 'bg-orange-500/80 text-white' // Bogey
-  return 'bg-red-500/80 text-white' // Double+
+  if (diff <= -2) return 'score-eagle' // Eagle or better - double circle
+  if (diff === -1) return 'score-birdie' // Birdie - single circle
+  if (diff === 0) return 'score-par' // Par - no decoration
+  if (diff === 1) return 'score-bogey' // Bogey - single square
+  return 'score-double' // Double+ - double square
 }
 
 function getHolePars() {
@@ -457,5 +457,36 @@ function getHolePars() {
 .accordion-leave-from {
   max-height: 500px;
   opacity: 1;
+}
+
+/* PGA-style score symbols */
+.score-eagle {
+  @apply text-yellow-400 font-bold;
+  border-radius: 50%;
+  border: 2px solid #facc15;
+  box-shadow: 0 0 0 2px #1f2937, 0 0 0 4px #facc15;
+}
+
+.score-birdie {
+  @apply text-green-400 font-bold;
+  border-radius: 50%;
+  border: 2px solid #4ade80;
+}
+
+.score-par {
+  @apply text-white font-bold;
+}
+
+.score-bogey {
+  @apply text-orange-400 font-bold;
+  border-radius: 2px;
+  border: 2px solid #fb923c;
+}
+
+.score-double {
+  @apply text-red-400 font-bold;
+  border-radius: 2px;
+  border: 2px solid #f87171;
+  box-shadow: 0 0 0 2px #1f2937, 0 0 0 4px #f87171;
 }
 </style>
