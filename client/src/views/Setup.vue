@@ -65,6 +65,7 @@ const calcuttaPayouts = ref([
 // Hole editing
 const editingHoles = ref(false)
 const editableHoles = ref([])
+const selectedTeeForDisplay = ref('white')
 
 // Computed
 const gameInfo = computed(() => GAME_TYPE_INFO[gameType.value])
@@ -106,10 +107,67 @@ const calcuttaTotalPercent = computed(() => {
 
 const teamColors = ['golf-green', 'gold', 'blue-500', 'purple-500', 'pink-500', 'orange-500']
 
+// Tee display helpers
+const availableTees = computed(() => {
+  // Check which tees have yardage data
+  const teesWithData = []
+  for (const tee of teeOptions) {
+    const hasYardage = courseStore.holes.some(h => h[`yardage_${tee.value}`])
+    const hasTeeBox = courseStore.teeBoxes.some(t =>
+      t.name?.toLowerCase().includes(tee.value) ||
+      tee.value.includes(t.name?.toLowerCase())
+    )
+    if (hasYardage || hasTeeBox) {
+      teesWithData.push({
+        ...tee,
+        colorClass: tee.value === 'black' ? 'bg-gray-900 border border-gray-500' :
+                    tee.value === 'blue' ? 'bg-blue-600' :
+                    tee.value === 'white' ? 'bg-white' :
+                    tee.value === 'gold' ? 'bg-yellow-400' :
+                    'bg-red-500'
+      })
+    }
+  }
+  // If no specific data, show white as default
+  if (teesWithData.length === 0) {
+    return [{
+      value: 'white',
+      label: 'White',
+      colorClass: 'bg-white'
+    }]
+  }
+  return teesWithData
+})
+
+function getTeeInfo(teeValue) {
+  if (!courseStore.teeBoxes.length) return null
+  const tee = courseStore.teeBoxes.find(t =>
+    t.name?.toLowerCase().includes(teeValue) ||
+    teeValue.includes(t.name?.toLowerCase())
+  )
+  return tee ? { slope: tee.slope, rating: tee.rating } : null
+}
+
+function getHoleYardage(hole) {
+  const yardage = hole[`yardage_${selectedTeeForDisplay.value}`]
+  return yardage || null
+}
+
 // Watchers
 watch(courseSearch, async (query) => {
   if (query.length >= 2) {
     await courseStore.searchCourses(query)
+  }
+})
+
+// Auto-select valid tee when course data loads
+watch(() => courseStore.holes, () => {
+  if (courseStore.holes.length && availableTees.value.length) {
+    // If current selection has no data, switch to first available
+    const hasData = courseStore.holes.some(h => h[`yardage_${selectedTeeForDisplay.value}`])
+    if (!hasData && availableTees.value[0]) {
+      selectedTeeForDisplay.value = availableTees.value[0].value
+    }
   }
 })
 
@@ -502,20 +560,73 @@ function getTeamColorClass(teamNum, type = 'bg') {
 
         <!-- Normal hole display -->
         <div v-if="courseStore.holes.length && !editingHoles">
-          <div class="mt-4 grid grid-cols-9 gap-1 text-xs text-center">
+          <!-- Tee Box Selector -->
+          <div v-if="availableTees.length > 0" class="mt-4 mb-3">
+            <div class="text-xs text-gray-400 mb-2">Select Tees</div>
+            <div class="flex flex-wrap gap-2">
+              <button
+                v-for="tee in availableTees"
+                :key="tee.value"
+                @click="selectedTeeForDisplay = tee.value"
+                :class="[
+                  'flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-all',
+                  selectedTeeForDisplay === tee.value
+                    ? 'bg-gray-700 ring-2 ring-golf-green'
+                    : 'bg-gray-800 hover:bg-gray-700'
+                ]"
+              >
+                <span :class="['w-3 h-3 rounded-full', tee.colorClass]"></span>
+                <span class="font-medium">{{ tee.label }}</span>
+                <span v-if="getTeeInfo(tee.value)" class="text-gray-400">
+                  {{ getTeeInfo(tee.value).slope }}/{{ getTeeInfo(tee.value).rating }}
+                </span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Yardage Summary -->
+          <div class="bg-gray-800 rounded-lg p-3 mb-3">
+            <div class="grid grid-cols-4 gap-2 text-center text-xs">
+              <div>
+                <div class="text-gray-500">Front</div>
+                <div class="font-bold text-sm">{{ courseStore.getFrontNineYardage(selectedTeeForDisplay) || '—' }}</div>
+              </div>
+              <div>
+                <div class="text-gray-500">Back</div>
+                <div class="font-bold text-sm">{{ courseStore.getBackNineYardage(selectedTeeForDisplay) || '—' }}</div>
+              </div>
+              <div>
+                <div class="text-gray-500">Total</div>
+                <div class="font-bold text-sm text-golf-green">{{ courseStore.getTotalYardage(selectedTeeForDisplay) || '—' }}</div>
+              </div>
+              <div>
+                <div class="text-gray-500">Par</div>
+                <div class="font-bold text-sm">{{ courseStore.getTotalPar() }}</div>
+              </div>
+            </div>
+            <!-- Slope/Rating for selected tee or course default -->
+            <div v-if="getTeeInfo(selectedTeeForDisplay) || courseStore.selectedCourse?.slope_rating" class="mt-2 pt-2 border-t border-gray-700 flex justify-center gap-4 text-xs">
+              <span class="text-gray-400">Slope: <span class="text-white font-medium">{{ getTeeInfo(selectedTeeForDisplay)?.slope || courseStore.selectedCourse?.slope_rating || '—' }}</span></span>
+              <span class="text-gray-400">Rating: <span class="text-white font-medium">{{ getTeeInfo(selectedTeeForDisplay)?.rating || courseStore.selectedCourse?.course_rating || '—' }}</span></span>
+            </div>
+          </div>
+
+          <!-- Hole Grid with Yardages -->
+          <div class="mt-2 grid grid-cols-9 gap-1 text-xs text-center">
             <div v-for="hole in courseStore.holes.slice(0, 9)" :key="hole.hole_number" class="bg-gray-700/50 rounded p-1">
-              <div class="text-gray-400">{{ hole.hole_number }}</div>
+              <div class="text-gray-500 text-[10px]">{{ hole.hole_number }}</div>
               <div class="font-bold">{{ hole.par }}</div>
+              <div class="text-[10px] text-gray-400">{{ getHoleYardage(hole) || '' }}</div>
             </div>
           </div>
           <div class="mt-1 grid grid-cols-9 gap-1 text-xs text-center">
             <div v-for="hole in courseStore.holes.slice(9, 18)" :key="hole.hole_number" class="bg-gray-700/50 rounded p-1">
-              <div class="text-gray-400">{{ hole.hole_number }}</div>
+              <div class="text-gray-500 text-[10px]">{{ hole.hole_number }}</div>
               <div class="font-bold">{{ hole.par }}</div>
+              <div class="text-[10px] text-gray-400">{{ getHoleYardage(hole) || '' }}</div>
             </div>
           </div>
-          <div class="mt-2 flex items-center justify-between">
-            <span class="text-sm text-gray-400">Par {{ courseStore.getTotalPar() }}</span>
+          <div class="mt-2 flex items-center justify-end">
             <button
               @click="startEditingHoles"
               class="text-xs text-yellow-400 hover:text-yellow-300 flex items-center gap-1"

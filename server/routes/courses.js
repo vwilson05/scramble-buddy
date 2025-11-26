@@ -124,6 +124,20 @@ router.get('/:id', async (req, res) => {
 
     if (cached) {
       const holes = db.prepare('SELECT * FROM holes WHERE course_id = ? ORDER BY hole_number').all(req.params.id)
+
+      // Parse cached data to get tee boxes
+      let teeBoxes = []
+      if (cached.data) {
+        try {
+          const courseData = JSON.parse(cached.data)
+          teeBoxes = (courseData.teeBoxes || []).map(t => ({
+            name: t.tee,
+            slope: t.slope,
+            rating: t.handicap
+          }))
+        } catch (e) { /* ignore parse errors */ }
+      }
+
       return res.json({
         course: {
           id: cached.id,
@@ -134,7 +148,8 @@ router.get('/:id', async (req, res) => {
           slope_rating: cached.slope_rating,
           course_rating: cached.course_rating
         },
-        holes
+        holes,
+        teeBoxes
       })
     }
 

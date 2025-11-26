@@ -9,6 +9,7 @@ export const useCourseStore = defineStore('course', () => {
   const searchResults = ref([])
   const selectedCourse = ref(null)
   const holes = ref([])
+  const teeBoxes = ref([])
   const loading = ref(false)
   const error = ref(null)
 
@@ -41,6 +42,7 @@ export const useCourseStore = defineStore('course', () => {
       const { data } = await axios.get(`${API_URL}/courses/${course.id}`)
       selectedCourse.value = data.course
       holes.value = data.holes
+      teeBoxes.value = data.teeBoxes || []
     } catch (err) {
       error.value = err.message
     } finally {
@@ -51,6 +53,7 @@ export const useCourseStore = defineStore('course', () => {
   function clearSelection() {
     selectedCourse.value = null
     holes.value = []
+    teeBoxes.value = []
     searchResults.value = []
   }
 
@@ -64,6 +67,25 @@ export const useCourseStore = defineStore('course', () => {
 
   function getTotalPar() {
     return holes.value.reduce((sum, h) => sum + h.par, 0)
+  }
+
+  function getYardage(teeColor, startHole = 1, endHole = 18) {
+    const yardageKey = `yardage_${teeColor.toLowerCase()}`
+    return holes.value
+      .filter(h => h.hole_number >= startHole && h.hole_number <= endHole)
+      .reduce((sum, h) => sum + (h[yardageKey] || 0), 0)
+  }
+
+  function getFrontNineYardage(teeColor) {
+    return getYardage(teeColor, 1, 9)
+  }
+
+  function getBackNineYardage(teeColor) {
+    return getYardage(teeColor, 10, 18)
+  }
+
+  function getTotalYardage(teeColor) {
+    return getYardage(teeColor, 1, 18)
   }
 
   async function updateHoles(courseId, updatedHoles) {
@@ -88,6 +110,7 @@ export const useCourseStore = defineStore('course', () => {
     searchResults,
     selectedCourse,
     holes,
+    teeBoxes,
     loading,
     error,
     // Actions
@@ -97,6 +120,10 @@ export const useCourseStore = defineStore('course', () => {
     getHole,
     getPar3Holes,
     getTotalPar,
+    getYardage,
+    getFrontNineYardage,
+    getBackNineYardage,
+    getTotalYardage,
     updateHoles
   }
 })
