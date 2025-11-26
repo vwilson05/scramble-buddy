@@ -28,7 +28,14 @@ const pressingBet = ref(null)
 const pressingSegment = ref(null)
 
 onMounted(async () => {
-  await sideBetsStore.fetchSideBets(props.tournamentId)
+  await Promise.all([
+    sideBetsStore.fetchSideBets(props.tournamentId),
+    tournamentStore.fetchLeaderboard(props.tournamentId)
+  ])
+  // Load course data if we have a course_id
+  if (tournamentStore.currentTournament?.course_id && courseStore.holes.length === 0) {
+    await courseStore.selectCourse({ id: tournamentStore.currentTournament.course_id })
+  }
   loading.value = false
 })
 
@@ -42,6 +49,7 @@ const tournament = computed(() => tournamentStore.currentTournament)
 const players = computed(() => tournamentStore.players)
 const scores = computed(() => tournamentStore.scores)
 const holes = computed(() => courseStore.holes)
+const leaderboard = computed(() => tournamentStore.leaderboard?.leaderboard || [])
 
 // Check if tournament has money on the line
 const hasMainBet = computed(() => {
@@ -80,6 +88,38 @@ const segments = computed(() => {
 
 // Calculate net score for a player over a range of holes
 function getNetScoreForRange(playerId, startHole, endHole) {
+  // Try to use leaderboard data first (has correct pars from backend)
+  const playerEntry = leaderboard.value.find(e => e.player?.id === playerId)
+
+  if (playerEntry?.holeScores) {
+    let netTotal = 0
+    let holesPlayed = 0
+
+    for (let h = startHole; h <= endHole; h++) {
+      const holeScore = playerEntry.holeScores[h - 1]
+      if (holeScore?.net !== null && holeScore?.net !== undefined) {
+        netTotal += holeScore.net
+        holesPlayed++
+      }
+    }
+
+    // Calculate par for this range from leaderboard's hole data
+    let rangePar = 0
+    for (let h = startHole; h <= endHole; h++) {
+      const holeScore = playerEntry.holeScores[h - 1]
+      if (holeScore?.par) {
+        rangePar += holeScore.par
+      }
+    }
+
+    return {
+      net: netTotal - rangePar,
+      holesPlayed,
+      totalHoles: endHole - startHole + 1
+    }
+  }
+
+  // Fallback to local calculation if leaderboard not available
   let totalStrokes = 0
   let totalPar = 0
   let holesPlayed = 0
