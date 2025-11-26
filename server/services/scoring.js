@@ -299,10 +299,13 @@ function calculateBetSettlements(leaderboard, tournament) {
 
   if (!bet_amount && !greenie_amount) return settlements
 
-  // Simple stroke play settlement
-  if (game_type === 'stroke_play' && leaderboard.length >= 2) {
-    const winner = leaderboard[0]
-    const losers = leaderboard.slice(1)
+  // Sort by NET score for bet settlements (bets are always on net)
+  const byNet = [...leaderboard].sort((a, b) => a.netTotal - b.netTotal)
+
+  // Simple stroke play settlement (based on net scores)
+  if (game_type === 'stroke_play' && byNet.length >= 2) {
+    const winner = byNet[0]
+    const losers = byNet.slice(1)
 
     losers.forEach(loser => {
       settlements.push({
