@@ -125,15 +125,37 @@ export function initializeDatabase(db) {
     CREATE TABLE IF NOT EXISTS holes (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       course_id TEXT NOT NULL,
+      nine_name TEXT, -- for 27-hole courses: 'Canyon', 'Ranch', 'Lakes', etc.
       hole_number INTEGER NOT NULL,
       par INTEGER NOT NULL,
       handicap_rating INTEGER,
-      yardage_white INTEGER,
+      yardage_black INTEGER,
       yardage_blue INTEGER,
+      yardage_white INTEGER,
       yardage_gold INTEGER,
+      yardage_red INTEGER,
+      manual_override INTEGER DEFAULT 0, -- 1 if user manually edited this hole
       UNIQUE(course_id, hole_number)
     )
   `)
+
+  // Add nine_name column for 27-hole courses
+  try {
+    db.exec(`ALTER TABLE holes ADD COLUMN nine_name TEXT`)
+  } catch (e) { /* column already exists */ }
+
+  // Add yardage_black and yardage_red columns
+  try {
+    db.exec(`ALTER TABLE holes ADD COLUMN yardage_black INTEGER`)
+  } catch (e) { /* column already exists */ }
+
+  try {
+    db.exec(`ALTER TABLE holes ADD COLUMN yardage_red INTEGER`)
+  } catch (e) { /* column already exists */ }
+
+  try {
+    db.exec(`ALTER TABLE holes ADD COLUMN manual_override INTEGER DEFAULT 0`)
+  } catch (e) { /* column already exists */ }
 
   // Scores table
   db.exec(`

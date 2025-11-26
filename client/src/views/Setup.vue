@@ -23,9 +23,17 @@ const nassauFormat = ref('6-6-6')
 const courseSearch = ref('')
 const selectedCourse = ref(null)
 const players = ref([
-  { name: '', handicap: 0, team: 1 },
-  { name: '', handicap: 0, team: 1 }
+  { name: '', handicap: 0, team: 1, tee: 'white' },
+  { name: '', handicap: 0, team: 1, tee: 'white' }
 ])
+
+const teeOptions = [
+  { value: 'black', label: 'Black', color: 'bg-gray-900 border-gray-600' },
+  { value: 'blue', label: 'Blue', color: 'bg-blue-600' },
+  { value: 'white', label: 'White', color: 'bg-white' },
+  { value: 'gold', label: 'Gold', color: 'bg-yellow-400' },
+  { value: 'red', label: 'Red', color: 'bg-red-500' }
+]
 const numTeams = ref(2)
 const betAmount = ref(5)
 const nassauSegmentBet = ref(10)
@@ -53,6 +61,10 @@ const calcuttaPayouts = ref([
   { place: 2, percent: 30 },
   { place: 3, percent: 20 }
 ])
+
+// Hole editing
+const editingHoles = ref(false)
+const editableHoles = ref([])
 
 // Computed
 const gameInfo = computed(() => GAME_TYPE_INFO[gameType.value])
@@ -150,7 +162,7 @@ function selectCourse(course) {
 
 function addPlayer() {
   const nextTeam = isTeamGame.value ? ((players.value.length % numTeams.value) + 1) : 1
-  players.value.push({ name: '', handicap: 0, team: nextTeam })
+  players.value.push({ name: '', handicap: 0, team: nextTeam, tee: 'white' })
 }
 
 function removePlayer(index) {
@@ -196,6 +208,33 @@ function toggleGreenieHole(holeNumber) {
   } else {
     selectedGreenieHoles.value.push(holeNumber)
   }
+}
+
+function startEditingHoles() {
+  editableHoles.value = courseStore.holes.map(h => ({
+    hole_number: h.hole_number,
+    par: h.par,
+    handicap_rating: h.handicap_rating
+  }))
+  editingHoles.value = true
+}
+
+async function saveHoleEdits() {
+  try {
+    await courseStore.updateHoles(selectedCourse.value.id, editableHoles.value)
+    editingHoles.value = false
+    // Update greenie holes based on new pars
+    setTimeout(() => {
+      selectedGreenieHoles.value = par3Holes.value.map(h => h.hole_number)
+    }, 100)
+  } catch (error) {
+    console.error('Failed to save hole edits:', error)
+  }
+}
+
+function cancelHoleEdits() {
+  editingHoles.value = false
+  editableHoles.value = []
 }
 
 function addTeamPayout() {
@@ -279,7 +318,8 @@ async function startTournament() {
       await tournamentStore.addPlayer(tournamentId, {
         name: player.name,
         handicap: player.handicap,
-        team: isTeamGame.value ? player.team : null
+        team: isTeamGame.value ? player.team : null,
+        tee_color: player.tee || 'white'
       })
     }
 
@@ -460,65 +500,137 @@ function getTeamColorClass(teamNum, type = 'bg') {
           </button>
         </div>
 
-        <div v-if="courseStore.holes.length" class="mt-4 grid grid-cols-9 gap-1 text-xs text-center">
-          <div v-for="hole in courseStore.holes.slice(0, 9)" :key="hole.hole_number" class="bg-gray-700/50 rounded p-1">
-            <div class="text-gray-400">{{ hole.hole_number }}</div>
-            <div class="font-bold">{{ hole.par }}</div>
+        <!-- Normal hole display -->
+        <div v-if="courseStore.holes.length && !editingHoles">
+          <div class="mt-4 grid grid-cols-9 gap-1 text-xs text-center">
+            <div v-for="hole in courseStore.holes.slice(0, 9)" :key="hole.hole_number" class="bg-gray-700/50 rounded p-1">
+              <div class="text-gray-400">{{ hole.hole_number }}</div>
+              <div class="font-bold">{{ hole.par }}</div>
+            </div>
+          </div>
+          <div class="mt-1 grid grid-cols-9 gap-1 text-xs text-center">
+            <div v-for="hole in courseStore.holes.slice(9, 18)" :key="hole.hole_number" class="bg-gray-700/50 rounded p-1">
+              <div class="text-gray-400">{{ hole.hole_number }}</div>
+              <div class="font-bold">{{ hole.par }}</div>
+            </div>
+          </div>
+          <div class="mt-2 flex items-center justify-between">
+            <span class="text-sm text-gray-400">Par {{ courseStore.getTotalPar() }}</span>
+            <button
+              @click="startEditingHoles"
+              class="text-xs text-yellow-400 hover:text-yellow-300 flex items-center gap-1"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+              Fix Pars
+            </button>
           </div>
         </div>
-        <div v-if="courseStore.holes.length" class="mt-1 grid grid-cols-9 gap-1 text-xs text-center">
-          <div v-for="hole in courseStore.holes.slice(9, 18)" :key="hole.hole_number" class="bg-gray-700/50 rounded p-1">
-            <div class="text-gray-400">{{ hole.hole_number }}</div>
-            <div class="font-bold">{{ hole.par }}</div>
+
+        <!-- Hole editing mode -->
+        <div v-if="editingHoles" class="mt-4">
+          <div class="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-2 mb-3">
+            <div class="text-xs text-yellow-400 flex items-center gap-1">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Tap par to change (3, 4, or 5)
+            </div>
+          </div>
+          <div class="grid grid-cols-9 gap-1 text-xs text-center">
+            <div v-for="hole in editableHoles.slice(0, 9)" :key="hole.hole_number" class="bg-gray-700/50 rounded p-1">
+              <div class="text-gray-400">{{ hole.hole_number }}</div>
+              <button
+                @click="hole.par = hole.par === 5 ? 3 : hole.par + 1"
+                class="font-bold w-full py-1 hover:bg-yellow-500/30 rounded transition-colors"
+              >
+                {{ hole.par }}
+              </button>
+            </div>
+          </div>
+          <div class="mt-1 grid grid-cols-9 gap-1 text-xs text-center">
+            <div v-for="hole in editableHoles.slice(9, 18)" :key="hole.hole_number" class="bg-gray-700/50 rounded p-1">
+              <div class="text-gray-400">{{ hole.hole_number }}</div>
+              <button
+                @click="hole.par = hole.par === 5 ? 3 : hole.par + 1"
+                class="font-bold w-full py-1 hover:bg-yellow-500/30 rounded transition-colors"
+              >
+                {{ hole.par }}
+              </button>
+            </div>
+          </div>
+          <div class="mt-2 text-center text-sm text-gray-400">
+            Par {{ editableHoles.reduce((sum, h) => sum + h.par, 0) }}
+          </div>
+          <div class="mt-3 flex gap-2">
+            <button @click="cancelHoleEdits" class="flex-1 py-2 text-sm text-gray-400 hover:text-white">
+              Cancel
+            </button>
+            <button @click="saveHoleEdits" class="flex-1 py-2 text-sm bg-yellow-500 text-black rounded-lg font-semibold hover:bg-yellow-400">
+              Save Changes
+            </button>
           </div>
         </div>
-        <div class="mt-2 text-center text-sm text-gray-400">Par {{ courseStore.getTotalPar() }}</div>
       </div>
     </div>
 
     <!-- Step 3: Players -->
     <div v-if="step === 3" class="animate-slide-up">
       <h2 class="text-2xl font-bold mb-2">Who's playing?</h2>
-      <p class="text-gray-400 mb-6">Add all players with their handicaps</p>
-
-      <!-- Column Headers -->
-      <div class="flex gap-2 items-center mb-2 px-1">
-        <div class="w-8 shrink-0"></div>
-        <div class="flex-1 text-sm text-gray-400">Player Name</div>
-        <div class="w-16 text-sm text-gray-400 text-center">Handicap</div>
-        <div class="w-9 shrink-0"></div>
-      </div>
+      <p class="text-gray-400 mb-6">Add players with their handicaps and tees</p>
 
       <div class="space-y-3 mb-4">
-        <div v-for="(player, index) in players" :key="index" class="flex gap-2 items-center">
-          <div class="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center text-sm font-bold shrink-0">
-            {{ index + 1 }}
+        <div v-for="(player, index) in players" :key="index" class="card p-3">
+          <div class="flex gap-2 items-center mb-2">
+            <div class="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center text-sm font-bold shrink-0">
+              {{ index + 1 }}
+            </div>
+            <input
+              v-model="player.name"
+              type="text"
+              :placeholder="`Player ${index + 1} name`"
+              class="flex-1 p-3 bg-gray-700 border border-gray-600 rounded-xl focus:border-golf-green focus:outline-none"
+            />
+            <button
+              v-if="players.length > 2"
+              @click="removePlayer(index)"
+              class="p-2 text-red-400 hover:text-red-300 shrink-0"
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
-          <input
-            v-model="player.name"
-            type="text"
-            :placeholder="`Player ${index + 1} name`"
-            class="flex-1 p-3 bg-gray-800 border border-gray-700 rounded-xl focus:border-golf-green focus:outline-none"
-          />
-          <input
-            v-model.number="player.handicap"
-            type="number"
-            placeholder="0"
-            min="0"
-            max="54"
-            title="Player handicap index (0-54)"
-            class="w-16 p-3 bg-gray-800 border border-gray-700 rounded-xl focus:border-golf-green focus:outline-none text-center"
-          />
-          <button
-            v-if="players.length > 2"
-            @click="removePlayer(index)"
-            class="p-2 text-red-400 hover:text-red-300 shrink-0"
-          >
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-          <div v-else class="w-9 shrink-0"></div>
+          <div class="flex gap-2 items-center pl-10">
+            <div class="flex-1">
+              <label class="text-xs text-gray-500 block mb-1">Handicap</label>
+              <input
+                v-model.number="player.handicap"
+                type="number"
+                placeholder="0"
+                min="0"
+                max="54"
+                class="w-full p-2 bg-gray-700 border border-gray-600 rounded-lg focus:border-golf-green focus:outline-none text-center"
+              />
+            </div>
+            <div class="flex-1">
+              <label class="text-xs text-gray-500 block mb-1">Tees</label>
+              <div class="flex gap-1">
+                <button
+                  v-for="tee in teeOptions"
+                  :key="tee.value"
+                  @click="player.tee = tee.value"
+                  :class="[
+                    'w-8 h-8 rounded-full border-2 transition-all',
+                    tee.color,
+                    player.tee === tee.value ? 'ring-2 ring-golf-green ring-offset-2 ring-offset-gray-800 scale-110' : 'opacity-60 hover:opacity-100'
+                  ]"
+                  :title="tee.label"
+                ></button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 

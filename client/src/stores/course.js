@@ -66,6 +66,23 @@ export const useCourseStore = defineStore('course', () => {
     return holes.value.reduce((sum, h) => sum + h.par, 0)
   }
 
+  async function updateHoles(courseId, updatedHoles) {
+    loading.value = true
+    error.value = null
+    try {
+      const { data } = await axios.put(`${API_URL}/courses/${courseId}/holes`, {
+        holes: updatedHoles
+      })
+      // Update local holes with the response
+      holes.value = data
+    } catch (err) {
+      error.value = err.message
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
   return {
     // State
     searchResults,
@@ -79,6 +96,7 @@ export const useCourseStore = defineStore('course', () => {
     clearSelection,
     getHole,
     getPar3Holes,
-    getTotalPar
+    getTotalPar,
+    updateHoles
   }
 })
