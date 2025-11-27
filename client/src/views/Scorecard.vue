@@ -850,21 +850,30 @@ async function shareLink() {
   position: absolute;
   top: 0;
   right: 0;
+  width: 48px;
+  height: 48px;
+  overflow: visible;
+}
+
+.greenie-corner::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
   width: 0;
   height: 0;
   border-style: solid;
   border-width: 0 48px 48px 0;
   border-color: transparent #22c55e transparent transparent;
-  border-top-right-radius: 12px;
 }
 
 .greenie-letter {
   position: absolute;
-  top: -42px;
-  right: -42px;
+  top: 8px;
+  right: 6px;
   color: #fbbf24;
   font-weight: 700;
   font-size: 14px;
-  transform: rotate(45deg);
+  z-index: 1;
 }
 </style>
