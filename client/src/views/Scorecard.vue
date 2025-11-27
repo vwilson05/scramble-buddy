@@ -106,8 +106,41 @@ const playerTotalGross = computed(() => {
   return store.getPlayerTotalGross(selectedPlayer.value.id)
 })
 
-const parTotal = computed(() => {
-  return courseStore.holes.slice(0, currentHole.value).reduce((sum, h) => sum + h.par, 0)
+// Scorecard computed values
+const front9Par = computed(() => {
+  return courseStore.holes.filter(h => h.hole_number <= 9).reduce((sum, h) => sum + h.par, 0)
+})
+
+const back9Par = computed(() => {
+  return courseStore.holes.filter(h => h.hole_number > 9).reduce((sum, h) => sum + h.par, 0)
+})
+
+const totalPar = computed(() => {
+  return courseStore.holes.reduce((sum, h) => sum + h.par, 0)
+})
+
+const front9Score = computed(() => {
+  if (!selectedPlayer.value) return 0
+  const playerScores = store.scores.filter(s => s.player_id === selectedPlayer.value.id && s.hole_number <= 9)
+  return playerScores.reduce((sum, s) => sum + (s.strokes || 0), 0)
+})
+
+const back9Score = computed(() => {
+  if (!selectedPlayer.value) return 0
+  const playerScores = store.scores.filter(s => s.player_id === selectedPlayer.value.id && s.hole_number > 9)
+  return playerScores.reduce((sum, s) => sum + (s.strokes || 0), 0)
+})
+
+const front9ToPar = computed(() => {
+  return front9Score.value - front9Par.value
+})
+
+const back9ToPar = computed(() => {
+  return back9Score.value - back9Par.value
+})
+
+const totalToPar = computed(() => {
+  return playerTotalGross.value - totalPar.value
 })
 
 const toPar = computed(() => {
@@ -235,6 +268,29 @@ function getHoleScoreIndicator(holeNumber, playerId) {
   return 'red'
 }
 
+function getHolePar(holeNumber) {
+  const hole = courseStore.holes.find(h => h.hole_number === holeNumber)
+  return hole?.par || 4
+}
+
+function getHoleScore(holeNumber) {
+  if (!selectedPlayer.value) return null
+  const score = store.scores.find(s => s.player_id === selectedPlayer.value.id && s.hole_number === holeNumber)
+  return score?.strokes || null
+}
+
+function getScoreSymbolClass(holeNumber) {
+  const strokes = getHoleScore(holeNumber)
+  if (!strokes) return ''
+  const par = getHolePar(holeNumber)
+  const diff = strokes - par
+  if (diff <= -2) return 'score-eagle'
+  if (diff === -1) return 'score-birdie'
+  if (diff === 0) return 'score-par'
+  if (diff === 1) return 'score-bogey'
+  return 'score-double'
+}
+
 async function shareLink() {
   const url = window.location.href
   const text = `Join ${store.currentTournament?.name} on Scramble Buddy!`
@@ -319,103 +375,158 @@ async function shareLink() {
       </div>
     </div>
 
-    <!-- Hole Navigator -->
-    <div class="p-4">
-      <div class="grid grid-cols-9 gap-1 mb-2">
-        <button
-          v-for="hole in 9"
-          :key="hole"
-          @click="goToHole(hole)"
-          :class="[
-            'aspect-square rounded-lg text-sm font-bold flex items-center justify-center relative',
-            currentHole === hole ? 'bg-golf-green text-white' : 'bg-gray-800'
-          ]"
-        >
-          {{ hole }}
-          <span
-            v-if="getHoleScoreIndicator(hole, selectedPlayer?.id)"
+    <!-- Traditional Scorecard -->
+    <div class="p-3">
+      <!-- Front 9 -->
+      <div class="bg-gray-800 rounded-t-xl overflow-hidden">
+        <!-- Hole numbers row -->
+        <div class="grid grid-cols-10 text-center text-xs">
+          <div class="bg-gray-700 py-2 font-semibold text-gray-400">HOLE</div>
+          <button
+            v-for="hole in 9"
+            :key="hole"
+            @click="goToHole(hole)"
             :class="[
-              'absolute -top-1 -right-1 w-2 h-2 rounded-full',
-              getHoleScoreIndicator(hole, selectedPlayer?.id) === 'green' ? 'bg-golf-green' :
-              getHoleScoreIndicator(hole, selectedPlayer?.id) === 'gray' ? 'bg-gray-500' : 'bg-red-500'
+              'py-2 font-bold transition-colors',
+              currentHole === hole ? 'bg-golf-green text-white' : 'hover:bg-gray-700'
             ]"
-          ></span>
-        </button>
+          >
+            {{ hole }}
+          </button>
+        </div>
+        <!-- Par row -->
+        <div class="grid grid-cols-10 text-center text-xs border-t border-gray-700">
+          <div class="bg-gray-700 py-1 text-gray-400">PAR</div>
+          <div v-for="hole in 9" :key="hole" class="py-1 text-gray-400">
+            {{ getHolePar(hole) }}
+          </div>
+        </div>
+        <!-- Score row -->
+        <div class="grid grid-cols-10 text-center border-t border-gray-700">
+          <div class="bg-gray-700 py-2 text-xs text-gray-400 flex items-center justify-center">SCORE</div>
+          <button
+            v-for="hole in 9"
+            :key="hole"
+            @click="goToHole(hole)"
+            class="py-2 flex items-center justify-center"
+          >
+            <span
+              v-if="getHoleScore(hole)"
+              :class="getScoreSymbolClass(hole)"
+            >
+              {{ getHoleScore(hole) }}
+            </span>
+            <span v-else class="text-gray-600">-</span>
+          </button>
+        </div>
+        <!-- Front 9 total -->
+        <div class="grid grid-cols-10 text-center border-t-2 border-gray-600 bg-gray-750">
+          <div class="bg-gray-700 py-2 text-xs font-semibold text-gray-300">OUT</div>
+          <div class="col-span-8 py-2 text-sm text-gray-400">{{ front9Par }}</div>
+          <div class="py-2 font-bold" :class="front9ToPar > 0 ? 'text-red-400' : front9ToPar < 0 ? 'text-green-400' : 'text-white'">
+            {{ front9Score || '-' }}
+          </div>
+        </div>
       </div>
-      <div class="grid grid-cols-9 gap-1">
-        <button
-          v-for="hole in 9"
-          :key="hole + 9"
-          @click="goToHole(hole + 9)"
-          :class="[
-            'aspect-square rounded-lg text-sm font-bold flex items-center justify-center relative',
-            currentHole === hole + 9 ? 'bg-golf-green text-white' : 'bg-gray-800'
-          ]"
-        >
-          {{ hole + 9 }}
-          <span
-            v-if="getHoleScoreIndicator(hole + 9, selectedPlayer?.id)"
+
+      <!-- Back 9 -->
+      <div class="bg-gray-800 rounded-b-xl overflow-hidden mt-1">
+        <!-- Hole numbers row -->
+        <div class="grid grid-cols-10 text-center text-xs">
+          <div class="bg-gray-700 py-2 font-semibold text-gray-400">HOLE</div>
+          <button
+            v-for="hole in 9"
+            :key="hole + 9"
+            @click="goToHole(hole + 9)"
             :class="[
-              'absolute -top-1 -right-1 w-2 h-2 rounded-full',
-              getHoleScoreIndicator(hole + 9, selectedPlayer?.id) === 'green' ? 'bg-golf-green' :
-              getHoleScoreIndicator(hole + 9, selectedPlayer?.id) === 'gray' ? 'bg-gray-500' : 'bg-red-500'
+              'py-2 font-bold transition-colors',
+              currentHole === hole + 9 ? 'bg-golf-green text-white' : 'hover:bg-gray-700'
             ]"
-          ></span>
-        </button>
+          >
+            {{ hole + 9 }}
+          </button>
+        </div>
+        <!-- Par row -->
+        <div class="grid grid-cols-10 text-center text-xs border-t border-gray-700">
+          <div class="bg-gray-700 py-1 text-gray-400">PAR</div>
+          <div v-for="hole in 9" :key="hole + 9" class="py-1 text-gray-400">
+            {{ getHolePar(hole + 9) }}
+          </div>
+        </div>
+        <!-- Score row -->
+        <div class="grid grid-cols-10 text-center border-t border-gray-700">
+          <div class="bg-gray-700 py-2 text-xs text-gray-400 flex items-center justify-center">SCORE</div>
+          <button
+            v-for="hole in 9"
+            :key="hole + 9"
+            @click="goToHole(hole + 9)"
+            class="py-2 flex items-center justify-center"
+          >
+            <span
+              v-if="getHoleScore(hole + 9)"
+              :class="getScoreSymbolClass(hole + 9)"
+            >
+              {{ getHoleScore(hole + 9) }}
+            </span>
+            <span v-else class="text-gray-600">-</span>
+          </button>
+        </div>
+        <!-- Back 9 total -->
+        <div class="grid grid-cols-10 text-center border-t-2 border-gray-600 bg-gray-750">
+          <div class="bg-gray-700 py-2 text-xs font-semibold text-gray-300">IN</div>
+          <div class="col-span-8 py-2 text-sm text-gray-400">{{ back9Par }}</div>
+          <div class="py-2 font-bold" :class="back9ToPar > 0 ? 'text-red-400' : back9ToPar < 0 ? 'text-green-400' : 'text-white'">
+            {{ back9Score || '-' }}
+          </div>
+        </div>
+        <!-- Total row -->
+        <div class="grid grid-cols-10 text-center border-t-2 border-golf-green bg-gray-900">
+          <div class="bg-gray-700 py-2 text-xs font-bold text-white">TOT</div>
+          <div class="col-span-8 py-2 text-sm font-semibold text-gray-300">{{ totalPar }}</div>
+          <div class="py-2 font-bold text-lg" :class="totalToPar > 0 ? 'text-red-400' : totalToPar < 0 ? 'text-green-400' : 'text-white'">
+            {{ playerTotalGross || '-' }}
+          </div>
+        </div>
       </div>
     </div>
 
-    <!-- Current Hole Display -->
-    <div class="text-center px-4 mb-6">
-      <div class="flex items-center justify-center gap-4 mb-4">
+    <!-- Current Hole Info -->
+    <div class="px-4 mb-4">
+      <div class="flex items-center gap-3">
         <button @click="prevHole" :disabled="currentHole === 1" class="p-2 rounded-full bg-gray-800 disabled:opacity-30">
-          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
           </svg>
         </button>
 
-        <div class="flex-1">
-          <div class="text-5xl font-bold">Hole {{ currentHole }}</div>
-
-          <!-- Hole Info Card -->
-          <div class="mt-3 bg-gray-800 rounded-xl p-3 inline-block min-w-[200px]">
-            <div class="flex items-center justify-center gap-6">
-              <!-- Par -->
-              <div class="text-center">
-                <div class="text-xs text-gray-500 uppercase">Par</div>
-                <div class="text-2xl font-bold">{{ currentHoleData.par }}</div>
-              </div>
-              <!-- Yardage -->
-              <div class="text-center">
-                <div class="text-xs text-gray-500 uppercase">{{ selectedPlayerTee }}</div>
-                <div class="text-2xl font-bold">{{ currentHoleYardage || '---' }}</div>
-              </div>
-              <!-- Handicap -->
-              <div class="text-center">
-                <div class="text-xs text-gray-500 uppercase">HCP</div>
-                <div class="text-2xl font-bold text-gray-400">{{ currentHoleData.handicap_rating || '—' }}</div>
+        <div class="flex-1 bg-gray-800 rounded-xl p-3">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-4">
+              <div class="text-2xl font-bold">Hole {{ currentHole }}</div>
+              <div class="flex items-center gap-3 text-sm">
+                <span class="text-gray-400">Par <span class="text-white font-bold">{{ currentHoleData.par }}</span></span>
+                <span class="text-gray-400">{{ currentHoleYardage }}<span class="text-xs ml-1">yds</span></span>
+                <span class="text-gray-500">HCP {{ currentHoleData.handicap_rating }}</span>
               </div>
             </div>
-            <!-- Greenie indicator -->
-            <div v-if="isGreenieHole" class="mt-2 pt-2 border-t border-gray-700">
-              <span class="text-golf-green text-sm font-semibold">🎯 GREENIE HOLE</span>
+            <div v-if="isGreenieHole" class="text-golf-green font-bold text-sm">
+              🎯 GREENIE
             </div>
+          </div>
+          <!-- Current hole score display -->
+          <div v-if="playerScoreForHole" class="mt-2 pt-2 border-t border-gray-700 flex items-center justify-between">
+            <span class="text-gray-400 text-sm">{{ selectedPlayer?.name }}'s score:</span>
+            <span :class="getScoreSymbolClass(currentHole)" class="text-lg">
+              {{ playerScoreForHole.strokes }}
+            </span>
           </div>
         </div>
 
         <button @click="nextHole" :disabled="currentHole === 18" class="p-2 rounded-full bg-gray-800 disabled:opacity-30">
-          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
           </svg>
         </button>
-      </div>
-
-      <!-- Current Score Display -->
-      <div v-if="selectedPlayer" class="mb-4">
-        <div class="text-gray-400 mb-1">{{ selectedPlayer.name }}'s Score</div>
-        <div class="text-3xl font-bold" :class="toPar.startsWith('+') ? 'text-red-400' : toPar.startsWith('-') ? 'text-golf-green' : 'text-gray-300'">
-          {{ toPar }}
-        </div>
       </div>
     </div>
 
@@ -649,5 +760,75 @@ async function shareLink() {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+/* PGA-style score symbols */
+.score-eagle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  color: #facc15;
+  font-weight: 700;
+  font-size: 14px;
+  border-radius: 50%;
+  border: 2px solid #facc15;
+  box-shadow: 0 0 0 2px #1f2937, 0 0 0 4px #facc15;
+}
+
+.score-birdie {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  color: #4ade80;
+  font-weight: 700;
+  font-size: 14px;
+  border-radius: 50%;
+  border: 2px solid #4ade80;
+}
+
+.score-par {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.score-bogey {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  color: #fb923c;
+  font-weight: 700;
+  font-size: 14px;
+  border-radius: 4px;
+  border: 2px solid #fb923c;
+}
+
+.score-double {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  color: #f87171;
+  font-weight: 700;
+  font-size: 14px;
+  border-radius: 4px;
+  border: 2px solid #f87171;
+  box-shadow: 0 0 0 2px #1f2937, 0 0 0 4px #f87171;
+}
+
+.bg-gray-750 {
+  background-color: #2d3748;
 }
 </style>
