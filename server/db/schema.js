@@ -265,5 +265,18 @@ export function initializeDatabase(db) {
     db.exec(`ALTER TABLE players ADD COLUMN multi_day_player_id INTEGER`)
   } catch (e) { /* column already exists */ }
 
+  // GHIN integration columns
+  try {
+    db.exec(`ALTER TABLE players ADD COLUMN ghin_number TEXT`)
+  } catch (e) { /* column already exists */ }
+
+  try {
+    db.exec(`ALTER TABLE players ADD COLUMN ghin_token TEXT`)
+  } catch (e) { /* column already exists */ }
+
+  try {
+    db.exec(`ALTER TABLE players ADD COLUMN ghin_connected_at TEXT`)
+  } catch (e) { /* column already exists */ }
+
   console.log('Database initialized successfully')
 }

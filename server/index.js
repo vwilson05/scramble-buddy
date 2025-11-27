@@ -12,6 +12,7 @@ import emailRoutes from './routes/email.js'
 import sideBetRoutes from './routes/sidebets.js'
 import calcuttaRoutes from './routes/calcutta.js'
 import multiDayRoutes from './routes/multiday.js'
+import ghinRoutes from './routes/ghin.js'
 
 dotenv.config()
 
@@ -33,6 +34,7 @@ app.use('/api/email', emailRoutes)
 app.use('/api/sidebets', sideBetRoutes)
 app.use('/api/calcutta', calcuttaRoutes)
 app.use('/api/multiday', multiDayRoutes)
+app.use('/api/ghin', ghinRoutes)
 
 // Health check
 app.get('/api/health', (req, res) => {
