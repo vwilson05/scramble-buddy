@@ -511,17 +511,17 @@ async function shareLink() {
           </svg>
         </button>
 
-        <div class="flex-1 bg-gray-800 rounded-xl p-4 relative overflow-hidden max-w-[200px] mx-auto">
+        <div class="flex-1 bg-gray-800 rounded-xl px-4 py-3 relative overflow-hidden">
           <!-- Greenie corner triangle -->
           <div v-if="isGreenieHole" class="greenie-corner">
             <span class="greenie-letter">G</span>
           </div>
-          <div class="text-center">
-            <div class="text-3xl font-bold mb-2">#{{ currentHole }}</div>
-            <div class="space-y-1 text-sm">
-              <div class="text-gray-400">Par <span class="text-white font-semibold">{{ currentHoleData.par }}</span></div>
-              <div class="text-gray-400">{{ currentHoleYardage }} <span class="text-gray-500">yds</span></div>
-              <div class="text-gray-500">HCP {{ currentHoleData.handicap_rating }}</div>
+          <div class="flex items-center gap-4">
+            <div class="text-2xl font-bold whitespace-nowrap">HOLE {{ currentHole }}</div>
+            <div class="text-sm text-gray-400 space-y-0.5">
+              <div>- Par {{ currentHoleData.par }}</div>
+              <div>- {{ currentHoleYardage }} yds</div>
+              <div>- HCP {{ currentHoleData.handicap_rating }}</div>
             </div>
           </div>
         </div>
