@@ -504,40 +504,31 @@ async function shareLink() {
 
     <!-- Current Hole Info -->
     <div class="px-3 mb-3">
-      <div class="flex items-center gap-2">
-        <button @click="prevHole" :disabled="currentHole === 1" class="p-2 rounded-full bg-gray-800 disabled:opacity-30">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+      <div class="flex items-center gap-3">
+        <button @click="prevHole" :disabled="currentHole === 1" class="p-3 rounded-full bg-gray-800 disabled:opacity-30">
+          <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7" />
           </svg>
         </button>
 
-        <div class="flex-1 bg-gray-800 rounded-xl p-3 relative">
-          <!-- Greenie badge -->
-          <div v-if="isGreenieHole" class="absolute -top-2 -right-2 bg-golf-green text-white text-xs font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
-            <span>🎯</span><span>G</span>
+        <div class="flex-1 bg-gray-800 rounded-xl p-4 relative overflow-hidden max-w-[200px] mx-auto">
+          <!-- Greenie corner triangle -->
+          <div v-if="isGreenieHole" class="greenie-corner">
+            <span class="greenie-letter">G</span>
           </div>
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-3">
-              <div class="text-xl font-bold">#{{ currentHole }}</div>
-              <div class="flex items-center gap-2 text-sm">
-                <span class="text-gray-400">P<span class="text-white font-bold">{{ currentHoleData.par }}</span></span>
-                <span class="text-gray-500">{{ currentHoleYardage }}y</span>
-                <span class="text-gray-600 text-xs">H{{ currentHoleData.handicap_rating }}</span>
-              </div>
-            </div>
-            <!-- Current hole score -->
-            <div v-if="playerScoreForHole" class="flex items-center gap-2">
-              <span class="text-gray-500 text-xs">{{ selectedPlayer?.name?.split(' ')[0] }}:</span>
-              <span :class="getScoreSymbolClass(currentHole)">
-                {{ playerScoreForHole.strokes }}
-              </span>
+          <div class="text-center">
+            <div class="text-3xl font-bold mb-2">#{{ currentHole }}</div>
+            <div class="space-y-1 text-sm">
+              <div class="text-gray-400">Par <span class="text-white font-semibold">{{ currentHoleData.par }}</span></div>
+              <div class="text-gray-400">{{ currentHoleYardage }} <span class="text-gray-500">yds</span></div>
+              <div class="text-gray-500">HCP {{ currentHoleData.handicap_rating }}</div>
             </div>
           </div>
         </div>
 
-        <button @click="nextHole" :disabled="currentHole === 18" class="p-2 rounded-full bg-gray-800 disabled:opacity-30">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+        <button @click="nextHole" :disabled="currentHole === 18" class="p-3 rounded-full bg-gray-800 disabled:opacity-30">
+          <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
           </svg>
         </button>
       </div>
@@ -852,5 +843,28 @@ async function shareLink() {
   color: #9ca3af;
   transform: rotate(-45deg);
   white-space: nowrap;
+}
+
+/* Greenie corner triangle */
+.greenie-corner {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 0 48px 48px 0;
+  border-color: transparent #22c55e transparent transparent;
+  border-top-right-radius: 12px;
+}
+
+.greenie-letter {
+  position: absolute;
+  top: -42px;
+  right: -42px;
+  color: white;
+  font-weight: 700;
+  font-size: 14px;
+  transform: rotate(45deg);
 }
 </style>
