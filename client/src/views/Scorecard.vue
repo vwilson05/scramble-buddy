@@ -519,9 +519,9 @@ async function shareLink() {
           <div class="flex items-center gap-4">
             <div class="text-2xl font-bold whitespace-nowrap">HOLE {{ currentHole }}</div>
             <div class="text-sm text-gray-400 space-y-0.5">
-              <div>- Par {{ currentHoleData.par }}</div>
-              <div>- {{ currentHoleYardage }} yds</div>
-              <div>- HCP {{ currentHoleData.handicap_rating }}</div>
+              <div>Par {{ currentHoleData.par }}</div>
+              <div>{{ currentHoleYardage }} yds</div>
+              <div>HCP {{ currentHoleData.handicap_rating }}</div>
             </div>
           </div>
         </div>
@@ -862,7 +862,7 @@ async function shareLink() {
   position: absolute;
   top: -42px;
   right: -42px;
-  color: white;
+  color: #fbbf24;
   font-weight: 700;
   font-size: 14px;
   transform: rotate(45deg);
