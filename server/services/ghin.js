@@ -35,9 +35,14 @@ export async function ghinLogin(ghinNumber, password) {
     const data = await response.json()
 
     if (!response.ok || data.error) {
+      // Provide clearer error messages
+      let errorMsg = data.error || data.message || 'Login failed'
+      if (errorMsg.toLowerCase().includes('not found') || errorMsg.toLowerCase().includes('invalid')) {
+        errorMsg = 'GHIN account not found or inactive. Please check your GHIN number and ensure your membership is active.'
+      }
       return {
         success: false,
-        error: data.error || data.message || 'Invalid credentials'
+        error: errorMsg
       }
     }
 

@@ -1462,7 +1462,7 @@ function getTeamColorClass(teamNum, type = 'bg') {
           </div>
 
           <div class="text-xs text-gray-500">
-            Your credentials are used only to fetch your handicap. We don't store your password.
+            Your credentials are used only to fetch your handicap. We don't store your password. Requires an active GHIN membership.
           </div>
 
           <button
