@@ -93,22 +93,17 @@ function getNetScoreForRange(playerId, startHole, endHole) {
 
   if (playerEntry?.holeScores) {
     let netTotal = 0
+    let rangePar = 0
     let holesPlayed = 0
 
     for (let h = startHole; h <= endHole; h++) {
       const holeScore = playerEntry.holeScores[h - 1]
+      // Only count holes that have been played (have a net score)
       if (holeScore?.net !== null && holeScore?.net !== undefined) {
         netTotal += holeScore.net
+        // Only add par for holes that have been played
+        rangePar += holeScore.par || 4
         holesPlayed++
-      }
-    }
-
-    // Calculate par for this range from leaderboard's hole data
-    let rangePar = 0
-    for (let h = startHole; h <= endHole; h++) {
-      const holeScore = playerEntry.holeScores[h - 1]
-      if (holeScore?.par) {
-        rangePar += holeScore.par
       }
     }
 
