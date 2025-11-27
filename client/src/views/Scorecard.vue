@@ -376,18 +376,20 @@ async function shareLink() {
     </div>
 
     <!-- Traditional Scorecard -->
-    <div class="p-3">
+    <div class="p-2">
       <!-- Front 9 -->
       <div class="bg-gray-800 rounded-t-xl overflow-hidden">
         <!-- Hole numbers row -->
         <div class="grid grid-cols-10 text-center text-xs">
-          <div class="bg-gray-700 py-2 font-semibold text-gray-400">HOLE</div>
+          <div class="bg-gray-700 h-7 flex items-center justify-center">
+            <span class="label-diagonal">HOLE</span>
+          </div>
           <button
             v-for="hole in 9"
             :key="hole"
             @click="goToHole(hole)"
             :class="[
-              'py-2 font-bold transition-colors',
+              'h-7 font-bold transition-colors flex items-center justify-center',
               currentHole === hole ? 'bg-golf-green text-white' : 'hover:bg-gray-700'
             ]"
           >
@@ -396,19 +398,23 @@ async function shareLink() {
         </div>
         <!-- Par row -->
         <div class="grid grid-cols-10 text-center text-xs border-t border-gray-700">
-          <div class="bg-gray-700 py-1 text-gray-400">PAR</div>
-          <div v-for="hole in 9" :key="hole" class="py-1 text-gray-400">
+          <div class="bg-gray-700 h-5 flex items-center justify-center">
+            <span class="label-diagonal text-gray-500">PAR</span>
+          </div>
+          <div v-for="hole in 9" :key="hole" class="h-5 flex items-center justify-center text-gray-500">
             {{ getHolePar(hole) }}
           </div>
         </div>
         <!-- Score row -->
         <div class="grid grid-cols-10 text-center border-t border-gray-700">
-          <div class="bg-gray-700 py-2 text-xs text-gray-400 flex items-center justify-center">SCORE</div>
+          <div class="bg-gray-700 h-8 flex items-center justify-center">
+            <span class="label-diagonal text-gray-500">SCR</span>
+          </div>
           <button
             v-for="hole in 9"
             :key="hole"
             @click="goToHole(hole)"
-            class="py-2 flex items-center justify-center"
+            class="h-8 flex items-center justify-center"
           >
             <span
               v-if="getHoleScore(hole)"
@@ -416,14 +422,14 @@ async function shareLink() {
             >
               {{ getHoleScore(hole) }}
             </span>
-            <span v-else class="text-gray-600">-</span>
+            <span v-else class="text-gray-600 text-xs">-</span>
           </button>
         </div>
         <!-- Front 9 total -->
         <div class="grid grid-cols-10 text-center border-t-2 border-gray-600 bg-gray-750">
-          <div class="bg-gray-700 py-2 text-xs font-semibold text-gray-300">OUT</div>
-          <div class="col-span-8 py-2 text-sm text-gray-400">{{ front9Par }}</div>
-          <div class="py-2 font-bold" :class="front9ToPar > 0 ? 'text-red-400' : front9ToPar < 0 ? 'text-green-400' : 'text-white'">
+          <div class="bg-gray-700 h-7 flex items-center justify-center text-xs font-semibold text-gray-300">OUT</div>
+          <div class="col-span-8 h-7 flex items-center justify-center text-xs text-gray-400">{{ front9Par }}</div>
+          <div class="h-7 flex items-center justify-center font-bold text-sm" :class="front9ToPar > 0 ? 'text-red-400' : front9ToPar < 0 ? 'text-green-400' : 'text-white'">
             {{ front9Score || '-' }}
           </div>
         </div>
@@ -433,13 +439,15 @@ async function shareLink() {
       <div class="bg-gray-800 rounded-b-xl overflow-hidden mt-1">
         <!-- Hole numbers row -->
         <div class="grid grid-cols-10 text-center text-xs">
-          <div class="bg-gray-700 py-2 font-semibold text-gray-400">HOLE</div>
+          <div class="bg-gray-700 h-7 flex items-center justify-center">
+            <span class="label-diagonal">HOLE</span>
+          </div>
           <button
             v-for="hole in 9"
             :key="hole + 9"
             @click="goToHole(hole + 9)"
             :class="[
-              'py-2 font-bold transition-colors',
+              'h-7 font-bold transition-colors flex items-center justify-center',
               currentHole === hole + 9 ? 'bg-golf-green text-white' : 'hover:bg-gray-700'
             ]"
           >
@@ -448,19 +456,23 @@ async function shareLink() {
         </div>
         <!-- Par row -->
         <div class="grid grid-cols-10 text-center text-xs border-t border-gray-700">
-          <div class="bg-gray-700 py-1 text-gray-400">PAR</div>
-          <div v-for="hole in 9" :key="hole + 9" class="py-1 text-gray-400">
+          <div class="bg-gray-700 h-5 flex items-center justify-center">
+            <span class="label-diagonal text-gray-500">PAR</span>
+          </div>
+          <div v-for="hole in 9" :key="hole + 9" class="h-5 flex items-center justify-center text-gray-500">
             {{ getHolePar(hole + 9) }}
           </div>
         </div>
         <!-- Score row -->
         <div class="grid grid-cols-10 text-center border-t border-gray-700">
-          <div class="bg-gray-700 py-2 text-xs text-gray-400 flex items-center justify-center">SCORE</div>
+          <div class="bg-gray-700 h-8 flex items-center justify-center">
+            <span class="label-diagonal text-gray-500">SCR</span>
+          </div>
           <button
             v-for="hole in 9"
             :key="hole + 9"
             @click="goToHole(hole + 9)"
-            class="py-2 flex items-center justify-center"
+            class="h-8 flex items-center justify-center"
           >
             <span
               v-if="getHoleScore(hole + 9)"
@@ -468,22 +480,22 @@ async function shareLink() {
             >
               {{ getHoleScore(hole + 9) }}
             </span>
-            <span v-else class="text-gray-600">-</span>
+            <span v-else class="text-gray-600 text-xs">-</span>
           </button>
         </div>
         <!-- Back 9 total -->
         <div class="grid grid-cols-10 text-center border-t-2 border-gray-600 bg-gray-750">
-          <div class="bg-gray-700 py-2 text-xs font-semibold text-gray-300">IN</div>
-          <div class="col-span-8 py-2 text-sm text-gray-400">{{ back9Par }}</div>
-          <div class="py-2 font-bold" :class="back9ToPar > 0 ? 'text-red-400' : back9ToPar < 0 ? 'text-green-400' : 'text-white'">
+          <div class="bg-gray-700 h-7 flex items-center justify-center text-xs font-semibold text-gray-300">IN</div>
+          <div class="col-span-8 h-7 flex items-center justify-center text-xs text-gray-400">{{ back9Par }}</div>
+          <div class="h-7 flex items-center justify-center font-bold text-sm" :class="back9ToPar > 0 ? 'text-red-400' : back9ToPar < 0 ? 'text-green-400' : 'text-white'">
             {{ back9Score || '-' }}
           </div>
         </div>
         <!-- Total row -->
         <div class="grid grid-cols-10 text-center border-t-2 border-golf-green bg-gray-900">
-          <div class="bg-gray-700 py-2 text-xs font-bold text-white">TOT</div>
-          <div class="col-span-8 py-2 text-sm font-semibold text-gray-300">{{ totalPar }}</div>
-          <div class="py-2 font-bold text-lg" :class="totalToPar > 0 ? 'text-red-400' : totalToPar < 0 ? 'text-green-400' : 'text-white'">
+          <div class="bg-gray-700 h-8 flex items-center justify-center text-xs font-bold text-white">TOT</div>
+          <div class="col-span-8 h-8 flex items-center justify-center text-xs font-semibold text-gray-300">{{ totalPar }}</div>
+          <div class="h-8 flex items-center justify-center font-bold" :class="totalToPar > 0 ? 'text-red-400' : totalToPar < 0 ? 'text-green-400' : 'text-white'">
             {{ playerTotalGross || '-' }}
           </div>
         </div>
@@ -491,34 +503,35 @@ async function shareLink() {
     </div>
 
     <!-- Current Hole Info -->
-    <div class="px-4 mb-4">
-      <div class="flex items-center gap-3">
+    <div class="px-3 mb-3">
+      <div class="flex items-center gap-2">
         <button @click="prevHole" :disabled="currentHole === 1" class="p-2 rounded-full bg-gray-800 disabled:opacity-30">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
           </svg>
         </button>
 
-        <div class="flex-1 bg-gray-800 rounded-xl p-3">
+        <div class="flex-1 bg-gray-800 rounded-xl p-3 relative">
+          <!-- Greenie badge -->
+          <div v-if="isGreenieHole" class="absolute -top-2 -right-2 bg-golf-green text-white text-xs font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+            <span>🎯</span><span>G</span>
+          </div>
           <div class="flex items-center justify-between">
-            <div class="flex items-center gap-4">
-              <div class="text-2xl font-bold">Hole {{ currentHole }}</div>
-              <div class="flex items-center gap-3 text-sm">
-                <span class="text-gray-400">Par <span class="text-white font-bold">{{ currentHoleData.par }}</span></span>
-                <span class="text-gray-400">{{ currentHoleYardage }}<span class="text-xs ml-1">yds</span></span>
-                <span class="text-gray-500">HCP {{ currentHoleData.handicap_rating }}</span>
+            <div class="flex items-center gap-3">
+              <div class="text-xl font-bold">#{{ currentHole }}</div>
+              <div class="flex items-center gap-2 text-sm">
+                <span class="text-gray-400">P<span class="text-white font-bold">{{ currentHoleData.par }}</span></span>
+                <span class="text-gray-500">{{ currentHoleYardage }}y</span>
+                <span class="text-gray-600 text-xs">H{{ currentHoleData.handicap_rating }}</span>
               </div>
             </div>
-            <div v-if="isGreenieHole" class="text-golf-green font-bold text-sm">
-              🎯 GREENIE
+            <!-- Current hole score -->
+            <div v-if="playerScoreForHole" class="flex items-center gap-2">
+              <span class="text-gray-500 text-xs">{{ selectedPlayer?.name?.split(' ')[0] }}:</span>
+              <span :class="getScoreSymbolClass(currentHole)">
+                {{ playerScoreForHole.strokes }}
+              </span>
             </div>
-          </div>
-          <!-- Current hole score display -->
-          <div v-if="playerScoreForHole" class="mt-2 pt-2 border-t border-gray-700 flex items-center justify-between">
-            <span class="text-gray-400 text-sm">{{ selectedPlayer?.name }}'s score:</span>
-            <span :class="getScoreSymbolClass(currentHole)" class="text-lg">
-              {{ playerScoreForHole.strokes }}
-            </span>
           </div>
         </div>
 
@@ -830,5 +843,14 @@ async function shareLink() {
 
 .bg-gray-750 {
   background-color: #2d3748;
+}
+
+/* Diagonal labels for scorecard */
+.label-diagonal {
+  font-size: 8px;
+  font-weight: 600;
+  color: #9ca3af;
+  transform: rotate(-45deg);
+  white-space: nowrap;
 }
 </style>
