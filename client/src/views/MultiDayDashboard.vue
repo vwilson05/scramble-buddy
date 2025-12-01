@@ -82,6 +82,10 @@ function goToRound(round) {
   }
 }
 
+const showTeamRandomizer = ref(false)
+const selectedRoundForTeams = ref(null)
+const randomizedTeams = ref([])
+
 async function startRound(round) {
   try {
     // Update the round status to active
@@ -94,6 +98,66 @@ async function startRound(round) {
     router.push(`/tournament/${round.id}/scorecard`)
   } catch (err) {
     console.error('Error starting round:', err)
+  }
+}
+
+function openTeamRandomizer(round) {
+  selectedRoundForTeams.value = round
+  randomizeTeams()
+  showTeamRandomizer.value = true
+}
+
+function randomizeTeams() {
+  // Shuffle players using Fisher-Yates
+  const shuffled = [...store.players]
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+  }
+
+  // Pair them into teams
+  const teams = []
+  const playersPerTeam = shuffled.length >= 4 ? 2 : 1
+
+  for (let i = 0; i < shuffled.length; i += playersPerTeam) {
+    const teamNum = Math.floor(i / playersPerTeam) + 1
+    const teamPlayers = shuffled.slice(i, i + playersPerTeam)
+    teams.push({
+      team: teamNum,
+      players: teamPlayers
+    })
+  }
+
+  randomizedTeams.value = teams
+}
+
+async function applyTeams() {
+  if (!selectedRoundForTeams.value) return
+
+  try {
+    // Update each player's team in this round
+    for (const team of randomizedTeams.value) {
+      for (const player of team.players) {
+        await fetch(`/api/tournaments/${selectedRoundForTeams.value.id}/players/${player.id}/team`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ team: team.team })
+        })
+      }
+    }
+
+    // Refresh data
+    await store.fetchMultiDay(multiDayId.value)
+    showTeamRandomizer.value = false
+  } catch (err) {
+    console.error('Error applying teams:', err)
+  }
+}
+
+async function applyAndStartRound() {
+  await applyTeams()
+  if (selectedRoundForTeams.value) {
+    await startRound(selectedRoundForTeams.value)
   }
 }
 
@@ -251,14 +315,24 @@ function getGameTypeLabel(type) {
                 </div>
               </div>
 
-              <!-- Start button for scheduled rounds -->
-              <button
-                v-if="round.status === 'scheduled'"
-                @click.stop="startRound(round)"
-                class="px-4 py-2 bg-golf-green rounded-lg font-semibold text-sm hover:bg-green-600 transition-colors"
-              >
-                Start Round
-              </button>
+              <!-- Buttons for scheduled rounds -->
+              <div v-if="round.status === 'scheduled'" class="flex gap-2">
+                <button
+                  @click.stop="openTeamRandomizer(round)"
+                  class="px-3 py-2 bg-purple-600 rounded-lg font-semibold text-sm hover:bg-purple-700 transition-colors"
+                  title="Randomize Teams"
+                >
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                </button>
+                <button
+                  @click.stop="startRound(round)"
+                  class="px-4 py-2 bg-golf-green rounded-lg font-semibold text-sm hover:bg-green-600 transition-colors"
+                >
+                  Start Round
+                </button>
+              </div>
 
               <!-- Status badge for other rounds -->
               <div v-else class="flex items-center gap-2">
@@ -336,6 +410,79 @@ function getGameTypeLabel(type) {
               </tr>
             </tbody>
           </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Team Randomizer Modal -->
+    <div v-if="showTeamRandomizer" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <div class="card max-w-md w-full">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-xl font-bold flex items-center gap-2">
+            <span class="text-2xl">🎲</span>
+            Random Teams
+          </h3>
+          <button @click="showTeamRandomizer = false" class="text-gray-400">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <p class="text-gray-400 text-sm mb-4">
+          Teams for {{ selectedRoundForTeams?.name }}
+        </p>
+
+        <!-- Team Display -->
+        <div class="space-y-3 mb-6">
+          <div
+            v-for="team in randomizedTeams"
+            :key="team.team"
+            class="bg-gray-800 rounded-xl p-4"
+          >
+            <div class="flex items-center gap-3 mb-2">
+              <div class="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center font-bold text-sm">
+                {{ team.team }}
+              </div>
+              <span class="font-semibold">Team {{ team.team }}</span>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <span
+                v-for="player in team.players"
+                :key="player.id"
+                class="px-3 py-1 bg-gray-700 rounded-full text-sm"
+              >
+                {{ player.name }}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Shuffle Again Button -->
+        <button
+          @click="randomizeTeams"
+          class="w-full py-3 bg-gray-700 rounded-xl font-semibold mb-3 flex items-center justify-center gap-2 hover:bg-gray-600 transition-colors"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          Shuffle Again
+        </button>
+
+        <!-- Action Buttons -->
+        <div class="flex gap-3">
+          <button
+            @click="applyTeams"
+            class="flex-1 py-3 bg-purple-600 rounded-xl font-semibold hover:bg-purple-700 transition-colors"
+          >
+            Save Teams
+          </button>
+          <button
+            @click="applyAndStartRound"
+            class="flex-1 py-3 bg-golf-green rounded-xl font-semibold hover:bg-green-600 transition-colors"
+          >
+            Save & Start
+          </button>
         </div>
       </div>
     </div>

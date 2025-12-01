@@ -189,6 +189,38 @@ router.post('/:id/players', (req, res) => {
   }
 })
 
+// Update player's team
+router.put('/:id/players/:playerId/team', (req, res) => {
+  try {
+    const tournament = findTournament(req.params.id)
+    if (!tournament) {
+      return res.status(404).json({ error: 'Tournament not found' })
+    }
+
+    const { playerId } = req.params
+    const { team } = req.body
+
+    // Find the player by multi_day_player_id (since we're passing the multi-day player ID)
+    let player = db.prepare('SELECT * FROM players WHERE tournament_id = ? AND multi_day_player_id = ?').get(tournament.id, playerId)
+
+    // If not found by multi_day_player_id, try by direct player id
+    if (!player) {
+      player = db.prepare('SELECT * FROM players WHERE tournament_id = ? AND id = ?').get(tournament.id, playerId)
+    }
+
+    if (!player) {
+      return res.status(404).json({ error: 'Player not found' })
+    }
+
+    db.prepare('UPDATE players SET team = ? WHERE id = ?').run(team, player.id)
+
+    const updatedPlayer = db.prepare('SELECT * FROM players WHERE id = ?').get(player.id)
+    res.json(updatedPlayer)
+  } catch (error) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
 // Get leaderboard
 router.get('/:id/leaderboard', (req, res) => {
   try {
