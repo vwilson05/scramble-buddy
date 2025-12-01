@@ -355,3 +355,158 @@ function calculateBetSettlements(leaderboard, tournament) {
 
   return Object.values(consolidated).filter(s => s.amount > 0)
 }
+
+/**
+ * Calculate High-Low standings between two teams
+ * Low point: lowest "low" wins (compare team best scores)
+ * High point: lowest "high" wins (compare team worst scores - lower is better)
+ *
+ * @param {Object} tournament - Tournament object
+ * @param {Array} team1Players - Array of player objects for team 1
+ * @param {Array} team2Players - Array of player objects for team 2
+ * @param {Array} scores - All scores for the tournament
+ * @param {Array} holes - Hole data with pars and handicap ratings
+ * @returns {Object} High-low standings with points per segment
+ */
+export function calculateHighLowStandings(tournament, team1Players, team2Players, scores, holes) {
+  const slopeRating = tournament.slope_rating || 113
+  const nassauFormat = tournament.nassau_format || '6-6-6'
+
+  // Build hole map
+  const holeMap = {}
+  holes.forEach(h => { holeMap[h.hole_number] = h })
+
+  // Calculate course handicaps
+  const handicaps = {}
+  ;[...team1Players, ...team2Players].forEach(p => {
+    handicaps[p.id] = calculateCourseHandicap(p.handicap, slopeRating)
+  })
+
+  // Initialize results
+  const result = {
+    team1: { name: team1Players.map(p => p.name).join(' & '), players: team1Players },
+    team2: { name: team2Players.map(p => p.name).join(' & '), players: team2Players },
+    holeResults: [],
+    segments: {},
+    overall: { team1Points: 0, team2Points: 0, holesPlayed: 0 }
+  }
+
+  // Define segments based on format
+  const segments = nassauFormat === '6-6-6'
+    ? { front: [1, 6], middle: [7, 12], back: [13, 18] }
+    : { front: [1, 9], back: [10, 18] }
+
+  // Initialize segment totals
+  Object.keys(segments).forEach(seg => {
+    result.segments[seg] = { team1Points: 0, team2Points: 0, holesPlayed: 0, range: segments[seg] }
+  })
+
+  // Calculate each hole
+  for (let holeNum = 1; holeNum <= 18; holeNum++) {
+    const hole = holeMap[holeNum]
+    if (!hole) continue
+
+    // Get net scores for each player on this hole
+    const getNetScore = (playerId) => {
+      const score = scores.find(s => s.player_id === playerId && s.hole_number === holeNum)
+      if (!score || !score.strokes) return null
+      const strokes = getStrokesOnHole(handicaps[playerId], hole.handicap_rating, hole.par)
+      return score.strokes - strokes
+    }
+
+    const team1Nets = team1Players.map(p => getNetScore(p.id)).filter(n => n !== null)
+    const team2Nets = team2Players.map(p => getNetScore(p.id)).filter(n => n !== null)
+
+    // Need at least one score from each team
+    if (team1Nets.length === 0 || team2Nets.length === 0) {
+      result.holeResults.push({ hole: holeNum, status: 'incomplete' })
+      continue
+    }
+
+    const team1Low = Math.min(...team1Nets)
+    const team1High = Math.max(...team1Nets)
+    const team2Low = Math.min(...team2Nets)
+    const team2High = Math.max(...team2Nets)
+
+    let lowPointWinner = null
+    let highPointWinner = null
+    let team1HolePoints = 0
+    let team2HolePoints = 0
+
+    // Low point: lowest low wins
+    if (team1Low < team2Low) {
+      lowPointWinner = 'team1'
+      team1HolePoints++
+    } else if (team2Low < team1Low) {
+      lowPointWinner = 'team2'
+      team2HolePoints++
+    } else {
+      lowPointWinner = 'tie'
+    }
+
+    // High point: lowest high wins (better of the "bad" scores)
+    if (team1High < team2High) {
+      highPointWinner = 'team1'
+      team1HolePoints++
+    } else if (team2High < team1High) {
+      highPointWinner = 'team2'
+      team2HolePoints++
+    } else {
+      highPointWinner = 'tie'
+    }
+
+    result.holeResults.push({
+      hole: holeNum,
+      team1Low, team1High,
+      team2Low, team2High,
+      lowPointWinner,
+      highPointWinner,
+      team1Points: team1HolePoints,
+      team2Points: team2HolePoints
+    })
+
+    // Add to totals
+    result.overall.team1Points += team1HolePoints
+    result.overall.team2Points += team2HolePoints
+    result.overall.holesPlayed++
+
+    // Add to appropriate segment
+    for (const [segName, [start, end]] of Object.entries(segments)) {
+      if (holeNum >= start && holeNum <= end) {
+        result.segments[segName].team1Points += team1HolePoints
+        result.segments[segName].team2Points += team2HolePoints
+        result.segments[segName].holesPlayed++
+        break
+      }
+    }
+  }
+
+  // Determine segment winners
+  Object.keys(result.segments).forEach(seg => {
+    const s = result.segments[seg]
+    if (s.team1Points > s.team2Points) {
+      s.winner = 'team1'
+      s.margin = s.team1Points - s.team2Points
+    } else if (s.team2Points > s.team1Points) {
+      s.winner = 'team2'
+      s.margin = s.team2Points - s.team1Points
+    } else {
+      s.winner = 'tie'
+      s.margin = 0
+    }
+  })
+
+  // Overall winner
+  if (result.overall.team1Points > result.overall.team2Points) {
+    result.overall.winner = 'team1'
+    result.overall.margin = result.overall.team1Points - result.overall.team2Points
+  } else if (result.overall.team2Points > result.overall.team1Points) {
+    result.overall.winner = 'team2'
+    result.overall.margin = result.overall.team2Points - result.overall.team1Points
+  } else {
+    result.overall.winner = 'tie'
+    result.overall.margin = 0
+  }
+
+  return result
+}

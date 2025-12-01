@@ -14,6 +14,7 @@ const tournamentId = computed(() => route.params.id)
 const showBets = ref(false)
 const showBetTracker = ref(false)
 const leaderboardData = ref(null)
+const highLowData = ref(null)
 const showNet = ref(true) // Default to net scoring for bets
 const expandedPlayer = ref(null) // For accordion scorecard
 
@@ -31,7 +32,21 @@ onUnmounted(() => {
 async function loadData() {
   await store.fetchTournament(tournamentId.value)
   leaderboardData.value = await store.fetchLeaderboard(tournamentId.value)
+
+  // Fetch High-Low data if game type is high_low
+  if (store.currentTournament?.game_type === 'high_low') {
+    try {
+      const response = await fetch(`/api/tournaments/${tournamentId.value}/high-low`)
+      if (response.ok) {
+        highLowData.value = await response.json()
+      }
+    } catch (e) {
+      console.error('Failed to load high-low standings:', e)
+    }
+  }
 }
+
+const isHighLow = computed(() => store.currentTournament?.game_type === 'high_low')
 
 const leaderboard = computed(() => {
   const data = leaderboardData.value?.leaderboard || []
@@ -142,6 +157,142 @@ function getHolePars() {
         >
           Net
         </button>
+      </div>
+    </div>
+
+    <!-- High-Low Match Standings -->
+    <div v-if="isHighLow && highLowData" class="px-4 mb-6">
+      <!-- Overall Score -->
+      <div class="card border border-gold/30 bg-gradient-to-br from-gray-800 to-gray-900 mb-4">
+        <div class="text-center mb-3">
+          <div class="text-xs text-gray-400 uppercase tracking-wider">Match Score</div>
+        </div>
+        <div class="flex items-center justify-between">
+          <div class="flex-1 text-center">
+            <div class="text-xs text-gray-400 mb-1">{{ highLowData.team1?.name }}</div>
+            <div :class="['text-4xl font-bold', highLowData.overall?.winner === 'team1' ? 'text-golf-green' : 'text-white']">
+              {{ highLowData.overall?.team1Points || 0 }}
+            </div>
+          </div>
+          <div class="px-4 text-gray-500 text-2xl font-light">-</div>
+          <div class="flex-1 text-center">
+            <div class="text-xs text-gray-400 mb-1">{{ highLowData.team2?.name }}</div>
+            <div :class="['text-4xl font-bold', highLowData.overall?.winner === 'team2' ? 'text-golf-green' : 'text-white']">
+              {{ highLowData.overall?.team2Points || 0 }}
+            </div>
+          </div>
+        </div>
+        <div class="text-center mt-2 text-xs text-gray-500">
+          {{ highLowData.overall?.holesPlayed || 0 }} holes played
+        </div>
+      </div>
+
+      <!-- Nassau Segments -->
+      <div class="grid grid-cols-3 gap-2 mb-4" v-if="highLowData.segments">
+        <div
+          v-for="(seg, name) in highLowData.segments"
+          :key="name"
+          :class="['card p-3 text-center', seg.winner === 'team1' ? 'border-golf-green' : seg.winner === 'team2' ? 'border-red-400' : 'border-gray-700']"
+        >
+          <div class="text-xs text-gray-400 uppercase mb-1">
+            {{ name === 'front' ? (highLowData.bets?.nassauFormat === '6-6-6' ? 'Holes 1-6' : 'Front 9') : name === 'middle' ? 'Holes 7-12' : (highLowData.bets?.nassauFormat === '6-6-6' ? 'Holes 13-18' : 'Back 9') }}
+          </div>
+          <div class="text-lg font-bold">
+            <span :class="seg.winner === 'team1' ? 'text-golf-green' : ''">{{ seg.team1Points }}</span>
+            <span class="text-gray-500 mx-1">-</span>
+            <span :class="seg.winner === 'team2' ? 'text-red-400' : ''">{{ seg.team2Points }}</span>
+          </div>
+          <div v-if="highLowData.bets?.segmentBet" class="text-xs text-gold mt-1">
+            ${{ highLowData.bets.segmentBet }}
+          </div>
+        </div>
+      </div>
+
+      <!-- Hole by Hole Results -->
+      <div class="card">
+        <div class="text-sm font-semibold mb-3 flex items-center justify-between">
+          <span>Hole Results</span>
+          <span class="text-xs text-gray-400">Low + High = 2 pts/hole</span>
+        </div>
+        <div class="space-y-1 max-h-48 overflow-y-auto">
+          <div
+            v-for="hole in highLowData.holeResults"
+            :key="hole.hole"
+            :class="['flex items-center text-sm py-1 px-2 rounded', hole.status === 'incomplete' ? 'bg-gray-800/30 text-gray-500' : 'bg-gray-800/50']"
+          >
+            <div class="w-12 text-gray-400">#{{ hole.hole }}</div>
+            <template v-if="hole.status !== 'incomplete'">
+              <div class="flex-1 flex items-center gap-3">
+                <!-- Low point -->
+                <div class="flex items-center gap-1">
+                  <span class="text-xs text-gray-500">L:</span>
+                  <span :class="[
+                    'font-mono',
+                    hole.lowPointWinner === 'team1' ? 'text-golf-green font-bold' : hole.lowPointWinner === 'team2' ? 'text-red-400' : 'text-gray-400'
+                  ]">{{ hole.team1Low }}</span>
+                  <span class="text-gray-600">v</span>
+                  <span :class="[
+                    'font-mono',
+                    hole.lowPointWinner === 'team2' ? 'text-red-400 font-bold' : hole.lowPointWinner === 'team1' ? 'text-golf-green' : 'text-gray-400'
+                  ]">{{ hole.team2Low }}</span>
+                </div>
+                <!-- High point -->
+                <div class="flex items-center gap-1">
+                  <span class="text-xs text-gray-500">H:</span>
+                  <span :class="[
+                    'font-mono',
+                    hole.highPointWinner === 'team1' ? 'text-golf-green font-bold' : hole.highPointWinner === 'team2' ? 'text-red-400' : 'text-gray-400'
+                  ]">{{ hole.team1High }}</span>
+                  <span class="text-gray-600">v</span>
+                  <span :class="[
+                    'font-mono',
+                    hole.highPointWinner === 'team2' ? 'text-red-400 font-bold' : hole.highPointWinner === 'team1' ? 'text-golf-green' : 'text-gray-400'
+                  ]">{{ hole.team2High }}</span>
+                </div>
+              </div>
+              <!-- Points -->
+              <div class="w-16 text-right font-mono">
+                <span :class="hole.team1Points > 0 ? 'text-golf-green' : 'text-gray-500'">{{ hole.team1Points }}</span>
+                <span class="text-gray-600 mx-1">-</span>
+                <span :class="hole.team2Points > 0 ? 'text-red-400' : 'text-gray-500'">{{ hole.team2Points }}</span>
+              </div>
+            </template>
+            <template v-else>
+              <div class="flex-1 text-gray-500 text-xs">Waiting for scores...</div>
+            </template>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bet Settlement for High-Low -->
+      <div v-if="highLowData.bets?.segmentBet || highLowData.bets?.overallBet" class="card mt-4 border-gold/30">
+        <div class="text-sm font-semibold text-gold mb-3">Bet Settlement</div>
+        <div class="space-y-2 text-sm">
+          <div v-for="(seg, name) in highLowData.segments" :key="name + '-bet'" class="flex justify-between">
+            <span class="text-gray-400">
+              {{ name === 'front' ? (highLowData.bets?.nassauFormat === '6-6-6' ? 'Holes 1-6' : 'Front 9') : name === 'middle' ? 'Holes 7-12' : (highLowData.bets?.nassauFormat === '6-6-6' ? 'Holes 13-18' : 'Back 9') }}:
+            </span>
+            <span v-if="seg.winner === 'tie'" class="text-gray-500">Tied - No blood</span>
+            <span v-else :class="seg.winner === 'team1' ? 'text-golf-green' : 'text-red-400'">
+              {{ seg.winner === 'team1' ? highLowData.team1?.name : highLowData.team2?.name }} wins ${{ highLowData.bets.segmentBet }}
+            </span>
+          </div>
+          <div v-if="highLowData.bets?.overallBet" class="flex justify-between pt-2 border-t border-gray-700">
+            <span class="text-gray-400">Overall:</span>
+            <span v-if="highLowData.overall?.winner === 'tie'" class="text-gray-500">Tied - No blood</span>
+            <span v-else :class="highLowData.overall?.winner === 'team1' ? 'text-golf-green' : 'text-red-400'">
+              {{ highLowData.overall?.winner === 'team1' ? highLowData.team1?.name : highLowData.team2?.name }} wins ${{ highLowData.bets.overallBet }}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- No teams assigned message for High-Low -->
+    <div v-else-if="isHighLow && !highLowData" class="px-4 mb-6">
+      <div class="card border-yellow-500/30 bg-yellow-900/10 text-center py-6">
+        <div class="text-yellow-400 mb-2">Teams not assigned</div>
+        <div class="text-sm text-gray-400">Assign players to Team A and Team B to see High-Low standings</div>
       </div>
     </div>
 

@@ -40,7 +40,7 @@ export const GAME_TYPE_INFO = {
   },
   high_low: {
     name: 'High-Low',
-    description: 'Team of 2, high + low score combined.',
+    description: '2v2 teams. Low point + high point per hole. Nassau betting.',
     isTeamGame: true,
     icon: 'HL'
   },

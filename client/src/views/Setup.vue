@@ -77,8 +77,8 @@ const ghinPassword = ref('')
 
 // Computed
 const gameInfo = computed(() => GAME_TYPE_INFO[gameType.value])
-const requiresTeams = computed(() => ['scramble'].includes(gameType.value))
-const canBeTeams = computed(() => ['best_ball', 'high_low', 'stroke_play', 'match_play', 'nassau', 'skins'].includes(gameType.value))
+const requiresTeams = computed(() => ['scramble', 'high_low'].includes(gameType.value))
+const canBeTeams = computed(() => ['best_ball', 'stroke_play', 'match_play', 'nassau', 'skins'].includes(gameType.value))
 const isTeamGame = computed(() => requiresTeams.value || (canBeTeams.value && playAsTeams.value))
 const par3Holes = computed(() => courseStore.holes.filter(h => h.par === 3))
 const validPlayers = computed(() => players.value.filter(p => p.name.trim()))
@@ -432,19 +432,21 @@ async function startTournament() {
       totalPot: totalPot.value
     } : null
 
+    const isNassauStyle = gameType.value === 'nassau' || gameType.value === 'high_low'
+
     const { id: tournamentId, slug } = await tournamentStore.createTournament({
       name: tournamentName.value,
       game_type: gameType.value,
       course_id: selectedCourse.value?.id,
       course_name: selectedCourse.value?.name,
       slope_rating: courseStore.selectedCourse?.slope_rating || 113,
-      bet_amount: useCustomPayouts.value ? 0 : (gameType.value === 'nassau' ? nassauSegmentBet.value : betAmount.value),
-      nassau_segment_bet: gameType.value === 'nassau' ? nassauSegmentBet.value : null,
-      nassau_overall_bet: gameType.value === 'nassau' ? nassauOverallBet.value : null,
+      bet_amount: useCustomPayouts.value ? 0 : (isNassauStyle ? nassauSegmentBet.value : betAmount.value),
+      nassau_segment_bet: isNassauStyle ? nassauSegmentBet.value : null,
+      nassau_overall_bet: isNassauStyle ? nassauOverallBet.value : null,
       greenie_amount: useCustomPayouts.value ? 0 : greenieAmount.value,
       skins_amount: gameType.value === 'skins' ? skinsAmount.value : 0,
       greenie_holes: selectedGreenieHoles.value.join(','),
-      nassau_format: gameType.value === 'nassau' ? nassauFormat.value : null,
+      nassau_format: isNassauStyle ? nassauFormat.value : null,
       is_team_game: isTeamGame.value ? 1 : 0,
       payout_config: payoutConfig
     })
@@ -558,9 +560,9 @@ function getTeamColorClass(teamNum, type = 'bg') {
         </div>
       </div>
 
-      <!-- Nassau Format -->
-      <div v-if="gameType === 'nassau'" class="card mt-4">
-        <div class="font-semibold mb-3">Nassau Format</div>
+      <!-- Nassau Format (for Nassau and High-Low) -->
+      <div v-if="gameType === 'nassau' || gameType === 'high_low'" class="card mt-4">
+        <div class="font-semibold mb-3">{{ gameType === 'high_low' ? 'Betting Format' : 'Nassau Format' }}</div>
         <div class="grid grid-cols-2 gap-3">
           <button
             @click="nassauFormat = '6-6-6'"
@@ -994,9 +996,9 @@ function getTeamColorClass(teamNum, type = 'bg') {
 
       <!-- Simple Bets Mode -->
       <div v-if="!useCustomPayouts" class="space-y-4">
-        <!-- Nassau Bet (special UI) -->
-        <div v-if="gameType === 'nassau'" class="card">
-          <label class="block font-semibold mb-3">Nassau Bet</label>
+        <!-- Nassau/High-Low Bet (special UI) -->
+        <div v-if="gameType === 'nassau' || gameType === 'high_low'" class="card">
+          <label class="block font-semibold mb-3">{{ gameType === 'high_low' ? 'High-Low Bet' : 'Nassau Bet' }}</label>
 
           <!-- Segment Bet -->
           <div class="mb-4">
@@ -1131,8 +1133,8 @@ function getTeamColorClass(teamNum, type = 'bg') {
           <div class="text-sm space-y-1 text-gray-400">
             <div>{{ gameInfo?.name }} {{ isTeamGame ? `(${numTeams} Teams)` : '(Individual)' }}</div>
             <div>{{ validPlayers.length }} players at {{ selectedCourse?.name }}</div>
-            <div v-if="gameType === 'nassau'">
-              ${{ nassauSegmentBet }}/{{ nassauSegmentBet }}/{{ nassauFormat === '6-6-6' ? nassauSegmentBet + '/' : '' }}{{ nassauOverallBet }} Nassau
+            <div v-if="gameType === 'nassau' || gameType === 'high_low'">
+              ${{ nassauSegmentBet }}/{{ nassauSegmentBet }}/{{ nassauFormat === '6-6-6' ? nassauSegmentBet + '/' : '' }}{{ nassauOverallBet }} {{ gameType === 'high_low' ? 'High-Low' : 'Nassau' }}
             </div>
             <div v-else-if="betAmount">${{ betAmount }} main bet</div>
             <div v-if="greenieAmount && selectedGreenieHoles.length">${{ greenieAmount }} greenies on {{ selectedGreenieHoles.length }} holes</div>

@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import db from '../db/index.js'
-import { calculateLeaderboard } from '../services/scoring.js'
+import { calculateLeaderboard, calculateHighLowStandings } from '../services/scoring.js'
 
 const router = Router()
 
@@ -235,6 +235,41 @@ router.get('/:id/leaderboard', (req, res) => {
 
     const leaderboard = calculateLeaderboard(tournament, players, scores, holes)
     res.json(leaderboard)
+  } catch (error) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+// Get High-Low standings (2v2 team match)
+router.get('/:id/high-low', (req, res) => {
+  try {
+    const tournament = findTournament(req.params.id)
+    if (!tournament) {
+      return res.status(404).json({ error: 'Tournament not found' })
+    }
+
+    const players = db.prepare('SELECT * FROM players WHERE tournament_id = ?').all(tournament.id)
+    const scores = db.prepare('SELECT * FROM scores WHERE tournament_id = ?').all(tournament.id)
+    const holes = tournament.course_id ? db.prepare('SELECT * FROM holes WHERE course_id = ? ORDER BY hole_number').all(tournament.course_id) : []
+
+    // Split players into teams
+    const team1Players = players.filter(p => p.team === 1 || p.team === 'A')
+    const team2Players = players.filter(p => p.team === 2 || p.team === 'B')
+
+    if (team1Players.length === 0 || team2Players.length === 0) {
+      return res.status(400).json({ error: 'High-Low requires players assigned to two teams' })
+    }
+
+    const standings = calculateHighLowStandings(tournament, team1Players, team2Players, scores, holes)
+
+    // Add bet amounts to response
+    standings.bets = {
+      segmentBet: tournament.nassau_segment_bet || 0,
+      overallBet: tournament.nassau_overall_bet || 0,
+      nassauFormat: tournament.nassau_format || '6-6-6'
+    }
+
+    res.json(standings)
   } catch (error) {
     res.status(500).json({ error: error.message })
   }
