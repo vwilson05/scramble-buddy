@@ -74,8 +74,26 @@ async function createRound() {
 function goToRound(round) {
   if (round.status === 'completed') {
     router.push(`/tournament/${round.id}/results`)
+  } else if (round.status === 'scheduled') {
+    // Don't navigate, show start button instead
+    return
   } else {
     router.push(`/tournament/${round.id}/scorecard`)
+  }
+}
+
+async function startRound(round) {
+  try {
+    // Update the round status to active
+    await fetch(`/api/tournaments/${round.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'active' })
+    })
+    // Navigate to the scorecard
+    router.push(`/tournament/${round.id}/scorecard`)
+  } catch (err) {
+    console.error('Error starting round:', err)
   }
 }
 
@@ -104,7 +122,15 @@ function getPlaceSuffix(place) {
 function getRoundStatusClass(status) {
   if (status === 'completed') return 'bg-golf-green'
   if (status === 'active') return 'bg-gold'
+  if (status === 'scheduled') return 'bg-blue-500'
   return 'bg-gray-600'
+}
+
+function getRoundStatusLabel(status) {
+  if (status === 'completed') return 'Completed'
+  if (status === 'active') return 'In Progress'
+  if (status === 'scheduled') return 'Scheduled'
+  return 'Setup'
 }
 
 function getGameTypeLabel(type) {
@@ -208,7 +234,10 @@ function getGameTypeLabel(type) {
             v-for="round in rounds"
             :key="round.id"
             @click="goToRound(round)"
-            class="card cursor-pointer hover:border-golf-green transition-all"
+            :class="[
+              'card transition-all',
+              round.status === 'scheduled' ? '' : 'cursor-pointer hover:border-golf-green'
+            ]"
           >
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-3">
@@ -217,12 +246,39 @@ function getGameTypeLabel(type) {
                   <div class="font-semibold">{{ round.name }}</div>
                   <div class="text-sm text-gray-400">
                     Day {{ round.day_number }} | {{ getGameTypeLabel(round.game_type) }}
+                    <span v-if="round.course_name"> | {{ round.course_name }}</span>
                   </div>
                 </div>
               </div>
-              <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-              </svg>
+
+              <!-- Start button for scheduled rounds -->
+              <button
+                v-if="round.status === 'scheduled'"
+                @click.stop="startRound(round)"
+                class="px-4 py-2 bg-golf-green rounded-lg font-semibold text-sm hover:bg-green-600 transition-colors"
+              >
+                Start Round
+              </button>
+
+              <!-- Status badge for other rounds -->
+              <div v-else class="flex items-center gap-2">
+                <span :class="[
+                  'text-xs px-2 py-1 rounded-full',
+                  round.status === 'completed' ? 'bg-golf-green/20 text-golf-green' :
+                  round.status === 'active' ? 'bg-gold/20 text-gold' : 'bg-gray-700 text-gray-400'
+                ]">
+                  {{ getRoundStatusLabel(round.status) }}
+                </span>
+                <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                </svg>
+              </div>
+            </div>
+
+            <!-- Show bet info for scheduled rounds -->
+            <div v-if="round.status === 'scheduled' && (round.bet_amount || round.greenie_amount)" class="mt-2 pt-2 border-t border-gray-700 flex gap-4 text-sm text-gray-400">
+              <span v-if="round.bet_amount">${{ round.bet_amount }} bet</span>
+              <span v-if="round.greenie_amount">${{ round.greenie_amount }} greenies</span>
             </div>
           </div>
         </div>

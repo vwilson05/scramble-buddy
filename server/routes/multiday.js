@@ -87,7 +87,8 @@ router.post('/', (req, res) => {
       num_rounds,
       point_system,
       payout_structure,
-      players
+      players,
+      scheduled_rounds
     } = req.body
 
     const slug = generateSlug(name || 'tournament')
@@ -120,14 +121,63 @@ router.post('/', (req, res) => {
       }
     }
 
-    const tournament = db.prepare('SELECT * FROM multi_day_tournaments WHERE id = ?').get(multiDayId)
+    // Get saved players for creating rounds
     const savedPlayers = db.prepare('SELECT * FROM multi_day_players WHERE multi_day_id = ?').all(multiDayId)
+
+    // Create scheduled rounds if provided
+    if (scheduled_rounds && scheduled_rounds.length > 0) {
+      const insertRound = db.prepare(`
+        INSERT INTO tournaments (
+          name, date, game_type, status, course_name, slope_rating,
+          bet_amount, greenie_amount, skins_amount, greenie_holes, nassau_format,
+          is_team_game, multi_day_id, day_number, round_number, slug, selfie_hole
+        ) VALUES (?, ?, ?, 'scheduled', ?, 113, ?, ?, 0, ?, '6-6-6', 0, ?, ?, ?, ?, ?)
+      `)
+
+      const insertRoundPlayer = db.prepare(`
+        INSERT INTO players (tournament_id, name, handicap, team, multi_day_player_id)
+        VALUES (?, ?, ?, ?, ?)
+      `)
+
+      for (const round of scheduled_rounds) {
+        const roundSlug = generateSlug(`${name}-round-${round.round_number}`)
+        const selfieHole = Math.floor(Math.random() * 12) + 4 // Random hole 4-15
+
+        // Default greenie holes for par 3s (common defaults)
+        const greenieHoles = round.greenie_amount > 0 ? '4,7,13,17' : null
+
+        const roundResult = insertRound.run(
+          round.name || `${name} - Round ${round.round_number}`,
+          round.date || start_date,
+          round.game_type || 'scramble',
+          round.course_name || null,
+          round.bet_amount || 0,
+          round.greenie_amount || 0,
+          greenieHoles,
+          multiDayId,
+          round.day_number || 1,
+          round.round_number,
+          roundSlug,
+          selfieHole
+        )
+
+        // Copy players to this round
+        const roundId = roundResult.lastInsertRowid
+        for (const player of savedPlayers) {
+          insertRoundPlayer.run(roundId, player.name, player.handicap, player.team, player.id)
+        }
+      }
+    }
+
+    const tournament = db.prepare('SELECT * FROM multi_day_tournaments WHERE id = ?').get(multiDayId)
+    const rounds = db.prepare('SELECT * FROM tournaments WHERE multi_day_id = ? ORDER BY round_number').all(multiDayId)
 
     res.status(201).json({
       ...tournament,
       point_system: JSON.parse(tournament.point_system || '[]'),
       payout_structure: JSON.parse(tournament.payout_structure || '[]'),
-      players: savedPlayers
+      players: savedPlayers,
+      rounds
     })
   } catch (error) {
     console.error('Error creating multi-day tournament:', error)

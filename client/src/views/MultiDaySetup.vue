@@ -7,7 +7,7 @@ const router = useRouter()
 const store = useMultiDayStore()
 
 const step = ref(1)
-const totalSteps = 4
+const totalSteps = 5
 
 // Step 1: Basic Info
 const tournamentName = ref('')
@@ -42,6 +42,16 @@ const payoutStructure = ref([
 ])
 const totalBuyIn = ref(100)
 
+// Step 5: Schedule Rounds
+const scheduledRounds = ref([])
+const gameTypes = [
+  { value: 'scramble', label: 'Scramble' },
+  { value: 'bestball', label: 'Best Ball' },
+  { value: 'stroke', label: 'Stroke Play' },
+  { value: 'modified', label: 'Modified Scramble' },
+  { value: 'shamble', label: 'Shamble' }
+]
+
 const loading = ref(false)
 const error = ref(null)
 
@@ -56,6 +66,8 @@ const canProceed = computed(() => {
       return pointSystem.value.length > 0
     case 4:
       return true
+    case 5:
+      return scheduledRounds.value.length > 0
     default:
       return false
   }
@@ -113,7 +125,39 @@ function removePayoutPlace(index) {
 function nextStep() {
   if (step.value < totalSteps && canProceed.value) {
     step.value++
+    // Generate scheduled rounds when entering step 5
+    if (step.value === 5 && scheduledRounds.value.length === 0) {
+      generateScheduledRounds()
+    }
   }
+}
+
+function generateScheduledRounds() {
+  const rounds = []
+  const roundsPerDay = Math.ceil(numRounds.value / numDays.value)
+
+  for (let r = 1; r <= numRounds.value; r++) {
+    const dayNum = Math.ceil(r / roundsPerDay)
+    const roundDate = new Date(startDate.value)
+    roundDate.setDate(roundDate.getDate() + dayNum - 1)
+
+    rounds.push({
+      round_number: r,
+      day_number: Math.min(dayNum, numDays.value),
+      name: `Round ${r}`,
+      course_name: '',
+      game_type: 'scramble',
+      bet_amount: 0,
+      greenie_amount: 0,
+      date: roundDate.toISOString().split('T')[0]
+    })
+  }
+
+  scheduledRounds.value = rounds
+}
+
+function getGameTypeLabel(type) {
+  return gameTypes.find(g => g.value === type)?.label || type
 }
 
 function prevStep() {
@@ -135,7 +179,8 @@ async function createTournament() {
       num_rounds: numRounds.value,
       point_system: pointSystem.value,
       payout_structure: payoutStructure.value,
-      players: players.value
+      players: players.value,
+      scheduled_rounds: scheduledRounds.value
     })
 
     // Navigate to the multi-day dashboard
@@ -418,6 +463,93 @@ function calculateEndDate() {
 
       <div v-if="payoutTotal !== 100" class="p-3 bg-orange-500/20 border border-orange-500/50 rounded-lg text-orange-400 text-sm">
         Payout total: {{ payoutTotal }}% (should be 100%)
+      </div>
+    </div>
+
+    <!-- Step 5: Schedule Rounds -->
+    <div v-if="step === 5" class="animate-slide-up">
+      <h2 class="text-2xl font-bold mb-2">Schedule Rounds</h2>
+      <p class="text-gray-400 mb-6">Pre-configure your {{ numRounds }} rounds - set courses, game types, and bets</p>
+
+      <div class="space-y-4">
+        <div
+          v-for="(round, index) in scheduledRounds"
+          :key="index"
+          class="bg-gray-800 rounded-xl p-4"
+        >
+          <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-full bg-golf-green/20 flex items-center justify-center font-bold text-golf-green">
+                {{ round.round_number }}
+              </div>
+              <div>
+                <div class="font-semibold">Round {{ round.round_number }}</div>
+                <div class="text-xs text-gray-400">Day {{ round.day_number }} - {{ round.date }}</div>
+              </div>
+            </div>
+            <span class="text-sm px-3 py-1 bg-gray-700 rounded-full">
+              {{ getGameTypeLabel(round.game_type) }}
+            </span>
+          </div>
+
+          <div class="space-y-3">
+            <div>
+              <label class="block text-xs text-gray-500 mb-1">Course Name</label>
+              <input
+                v-model="round.course_name"
+                type="text"
+                placeholder="e.g., Indian Canyons South"
+                class="w-full p-3 bg-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-golf-green"
+              />
+            </div>
+
+            <div class="grid grid-cols-3 gap-3">
+              <div>
+                <label class="block text-xs text-gray-500 mb-1">Game Type</label>
+                <select
+                  v-model="round.game_type"
+                  class="w-full p-3 bg-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-golf-green"
+                >
+                  <option v-for="type in gameTypes" :key="type.value" :value="type.value">
+                    {{ type.label }}
+                  </option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs text-gray-500 mb-1">Bet ($)</label>
+                <input
+                  v-model.number="round.bet_amount"
+                  type="number"
+                  min="0"
+                  placeholder="0"
+                  class="w-full p-3 bg-gray-700 rounded-lg text-sm text-center focus:outline-none focus:ring-2 focus:ring-golf-green"
+                />
+              </div>
+              <div>
+                <label class="block text-xs text-gray-500 mb-1">Greenie ($)</label>
+                <input
+                  v-model.number="round.greenie_amount"
+                  type="number"
+                  min="0"
+                  placeholder="0"
+                  class="w-full p-3 bg-gray-700 rounded-lg text-sm text-center focus:outline-none focus:ring-2 focus:ring-golf-green"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-6 p-4 bg-gray-800 rounded-xl">
+        <h3 class="font-semibold mb-2 flex items-center gap-2">
+          <svg class="w-5 h-5 text-golf-green" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          Pro Tip
+        </h3>
+        <p class="text-sm text-gray-400">
+          You can leave course names blank and fill them in later from the dashboard. The rounds will be ready to start when you arrive!
+        </p>
       </div>
     </div>
 
