@@ -531,9 +531,10 @@ function getLosingParty(bet, segment) {
               <div class="flex items-center justify-between">
                 <div>
                   <div class="font-bold text-lg">{{ bet.party1_name }} vs {{ bet.party2_name }}</div>
-                  <div class="text-xs text-gray-400">
-                    {{ gameTypes.find(g => g.value === bet.game_type)?.name }}
-                    <span v-if="bet.nassau_format"> • {{ bet.nassau_format }}</span>
+                  <div class="text-xs text-gray-400 flex items-center gap-2">
+                    <span>{{ gameTypes.find(g => g.value === bet.game_type)?.name }}</span>
+                    <span v-if="bet.nassau_format">• {{ bet.nassau_format }}</span>
+                    <span v-if="bet.use_high_low" class="px-2 py-0.5 bg-purple-600/30 text-purple-300 rounded-full text-[10px] font-semibold">HIGH-LOW</span>
                   </div>
                 </div>
                 <button @click="deleteBet(bet.id)" class="text-red-400 hover:text-red-300 text-xs px-2 py-1">
@@ -795,6 +796,21 @@ function getLosingParty(bet, segment) {
                 <div class="text-xs opacity-70">Front, Mid, Back, Overall</div>
               </button>
             </div>
+          </div>
+
+          <!-- High-Low Toggle (for team games) -->
+          <div v-if="gameType === 'nassau' || gameType === 'match_play' || gameType === 'best_ball'" class="mt-4 p-4 bg-gray-800 rounded-xl">
+            <label class="flex items-center gap-3 cursor-pointer">
+              <input
+                v-model="useHighLow"
+                type="checkbox"
+                class="w-5 h-5 rounded bg-gray-700 border-gray-600 text-purple-500 focus:ring-purple-500"
+              >
+              <div>
+                <div class="font-semibold">High-Low Scoring</div>
+                <div class="text-xs text-gray-400">Best + worst score per hole (2 points per hole)</div>
+              </div>
+            </label>
           </div>
         </div>
 
