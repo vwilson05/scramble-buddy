@@ -397,6 +397,15 @@ function getHolePars() {
           <span class="text-xs mt-1">Scorecard</span>
         </button>
         <button
+          @click="router.push(`/tournament/${tournamentId}/quick`)"
+          class="flex flex-col items-center text-gray-400"
+        >
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+          <span class="text-xs mt-1">Quick</span>
+        </button>
+        <button
           @click="router.push(`/tournament/${tournamentId}/leaderboard`)"
           class="flex flex-col items-center text-golf-green"
         >
@@ -414,16 +423,6 @@ function getHolePars() {
           </svg>
           <span class="text-xs mt-1">Bets</span>
         </button>
-        <a
-          href="https://www.ghin.com/login"
-          target="_blank"
-          class="flex flex-col items-center text-blue-400"
-        >
-          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-          </svg>
-          <span class="text-xs mt-1">Post GHIN</span>
-        </a>
       </div>
     </div>
 

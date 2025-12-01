@@ -28,6 +28,11 @@ const routes = [
     component: () => import('../views/Leaderboard.vue')
   },
   {
+    path: '/tournament/:id/quick',
+    name: 'QuickScore',
+    component: () => import('../views/QuickScore.vue')
+  },
+  {
     path: '/tournament/:id/results',
     name: 'Results',
     component: () => import('../views/Results.vue')
