@@ -130,6 +130,9 @@ async function submitScore(strokes) {
   // Check if this is a greenie hole
   if (isGreenieHole.value && strokes <= par) {
     showGreenieModal.value = true
+  } else {
+    // Auto-advance to next hole after a brief delay
+    autoAdvance()
   }
 }
 
@@ -147,11 +150,21 @@ async function submitGreenie() {
 
   showGreenieModal.value = false
   greenieDistance.value = ''
+  autoAdvance()
 }
 
 function skipGreenie() {
   showGreenieModal.value = false
   greenieDistance.value = ''
+  autoAdvance()
+}
+
+function autoAdvance() {
+  if (currentHole.value < 18) {
+    setTimeout(() => {
+      nextHole()
+    }, 400)
+  }
 }
 
 function getScoreButtonClass(score) {
