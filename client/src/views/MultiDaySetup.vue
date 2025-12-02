@@ -55,6 +55,14 @@ const gameTypes = [
 const loading = ref(false)
 const error = ref(null)
 
+// GHIN integration
+const showGhinModal = ref(false)
+const ghinLoading = ref(false)
+const ghinError = ref('')
+const ghinPlayerIndex = ref(null)
+const ghinNumber = ref('')
+const ghinPassword = ref('')
+
 // Computed
 const canProceed = computed(() => {
   switch (step.value) {
@@ -199,6 +207,75 @@ function getPlaceSuffix(place) {
   return 'th'
 }
 
+// GHIN functions
+function openGhinModal(index) {
+  ghinPlayerIndex.value = index
+  ghinNumber.value = players.value[index].ghinNumber || ''
+  ghinPassword.value = ''
+  ghinError.value = ''
+  showGhinModal.value = true
+}
+
+function closeGhinModal() {
+  showGhinModal.value = false
+  ghinPlayerIndex.value = null
+  ghinNumber.value = ''
+  ghinPassword.value = ''
+  ghinError.value = ''
+}
+
+async function connectGhin() {
+  if (!ghinNumber.value || !ghinPassword.value) {
+    ghinError.value = 'Please enter GHIN number and password'
+    return
+  }
+
+  ghinLoading.value = true
+  ghinError.value = ''
+
+  try {
+    const response = await fetch('/api/ghin/lookup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ghinNumber: ghinNumber.value,
+        password: ghinPassword.value
+      })
+    })
+
+    const data = await response.json()
+
+    if (!response.ok) {
+      ghinError.value = data.error || 'Failed to connect to GHIN'
+      return
+    }
+
+    // Update player with GHIN data
+    const player = players.value[ghinPlayerIndex.value]
+    player.handicap = data.handicapIndex
+    player.ghinNumber = ghinNumber.value
+    player.ghinConnected = true
+
+    // If player name is empty, use GHIN name
+    if (!player.name.trim() && data.golfer) {
+      player.name = `${data.golfer.firstName} ${data.golfer.lastName}`
+    }
+
+    closeGhinModal()
+  } catch (error) {
+    ghinError.value = 'Failed to connect to GHIN'
+    console.error('GHIN error:', error)
+  } finally {
+    ghinLoading.value = false
+  }
+}
+
+function disconnectGhin(index) {
+  const player = players.value[index]
+  player.ghinNumber = null
+  player.ghinConnected = false
+}
+
 function calculateEndDate() {
   if (startDate.value && numDays.value) {
     const start = new Date(startDate.value)
@@ -338,22 +415,49 @@ function calculateEndDate() {
         <div
           v-for="(player, index) in players"
           :key="index"
-          class="flex items-center justify-between p-4 bg-gray-800 rounded-xl"
+          class="p-4 bg-gray-800 rounded-xl"
         >
-          <div class="flex items-center gap-3">
-            <div v-if="isTeamEvent" class="w-8 h-8 rounded-full bg-golf-green/20 flex items-center justify-center text-golf-green font-bold text-sm">
-              T{{ player.team }}
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div v-if="isTeamEvent" class="w-8 h-8 rounded-full bg-golf-green/20 flex items-center justify-center text-golf-green font-bold text-sm">
+                T{{ player.team }}
+              </div>
+              <div>
+                <div class="font-semibold">{{ player.name }}</div>
+                <div class="text-sm text-gray-400">Handicap: {{ player.handicap }}</div>
+              </div>
             </div>
-            <div>
-              <div class="font-semibold">{{ player.name }}</div>
-              <div class="text-sm text-gray-400">Handicap: {{ player.handicap }}</div>
+            <button @click="removePlayer(index)" class="text-red-400 p-2">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </button>
+          </div>
+          <!-- GHIN Integration -->
+          <div class="mt-2 pt-2 border-t border-gray-700 flex items-center justify-between">
+            <span class="text-xs text-gray-500">GHIN Handicap</span>
+            <div v-if="!player.ghinConnected">
+              <button
+                @click="openGhinModal(index)"
+                class="px-3 py-1 bg-blue-600/20 border border-blue-500/50 rounded-lg text-blue-400 text-xs hover:bg-blue-600/30 transition-colors"
+              >
+                Connect GHIN
+              </button>
+            </div>
+            <div v-else class="flex items-center gap-2">
+              <span class="text-xs text-green-400 flex items-center gap-1">
+                <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                </svg>
+                GHIN #{{ player.ghinNumber }}
+              </span>
+              <button @click="disconnectGhin(index)" class="text-gray-500 hover:text-red-400">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
             </div>
           </div>
-          <button @click="removePlayer(index)" class="text-red-400 p-2">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-          </button>
         </div>
       </div>
 
@@ -592,6 +696,60 @@ function calculateEndDate() {
         >
           {{ loading ? 'Creating...' : 'Create Tournament' }}
         </button>
+      </div>
+    </div>
+
+    <!-- GHIN Connect Modal -->
+    <div v-if="showGhinModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <div class="card max-w-sm w-full animate-slide-up">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-xl font-bold">Connect to GHIN</h3>
+          <button @click="closeGhinModal" class="text-gray-400 hover:text-white">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div class="space-y-4">
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">GHIN Number</label>
+            <input
+              v-model="ghinNumber"
+              type="text"
+              placeholder="1234567"
+              class="w-full p-3 bg-gray-700 border border-gray-600 rounded-xl focus:border-blue-500 focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">Password</label>
+            <input
+              v-model="ghinPassword"
+              type="password"
+              placeholder="Your GHIN password"
+              class="w-full p-3 bg-gray-700 border border-gray-600 rounded-xl focus:border-blue-500 focus:outline-none"
+              @keyup.enter="connectGhin"
+            />
+          </div>
+
+          <div v-if="ghinError" class="text-red-400 text-sm">
+            {{ ghinError }}
+          </div>
+
+          <div class="text-xs text-gray-500">
+            Your credentials are used only to fetch your handicap. We don't store your password. Requires an active GHIN membership.
+          </div>
+
+          <button
+            @click="connectGhin"
+            :disabled="ghinLoading"
+            class="w-full py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            <span v-if="ghinLoading">Connecting...</span>
+            <span v-else>Connect</span>
+          </button>
+        </div>
       </div>
     </div>
   </div>
