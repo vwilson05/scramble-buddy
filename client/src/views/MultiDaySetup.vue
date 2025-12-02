@@ -484,7 +484,15 @@ function calculateEndDate() {
               </div>
               <div>
                 <div class="font-semibold">Round {{ round.round_number }}</div>
-                <div class="text-xs text-gray-400">Day {{ round.day_number }} - {{ round.date }}</div>
+                <div class="flex items-center gap-2 mt-1">
+                  <select
+                    v-model="round.day_number"
+                    class="px-2 py-1 bg-gray-700 rounded text-xs focus:outline-none focus:ring-1 focus:ring-golf-green"
+                  >
+                    <option v-for="d in numDays" :key="d" :value="d">Day {{ d }}</option>
+                  </select>
+                  <span class="text-xs text-gray-400">{{ round.date }}</span>
+                </div>
               </div>
             </div>
             <span class="text-sm px-3 py-1 bg-gray-700 rounded-full">

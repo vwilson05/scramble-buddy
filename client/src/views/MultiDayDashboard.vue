@@ -1,11 +1,13 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useMultiDayStore } from '../stores/multiday'
+import { useCourseStore } from '../stores/course'
 
 const route = useRoute()
 const router = useRouter()
 const store = useMultiDayStore()
+const courseStore = useCourseStore()
 
 const multiDayId = computed(() => route.params.id)
 const showNewRound = ref(false)
@@ -86,7 +88,73 @@ const showTeamRandomizer = ref(false)
 const selectedRoundForTeams = ref(null)
 const randomizedTeams = ref([])
 
+// Course selection for starting rounds
+const showCourseSelection = ref(false)
+const selectedRoundForCourse = ref(null)
+const courseSearch = ref('')
+const selectedCourse = ref(null)
+
+// Watch for course search
+watch(courseSearch, async (query) => {
+  if (query.length >= 2) {
+    await courseStore.searchCourses(query)
+  }
+})
+
+function openCourseSelection(round) {
+  selectedRoundForCourse.value = round
+  courseSearch.value = round.course_name || ''
+  selectedCourse.value = null
+  showCourseSelection.value = true
+}
+
+async function selectCourseForRound(course) {
+  selectedCourse.value = course
+  await courseStore.selectCourse(course)
+  courseSearch.value = course.name
+}
+
+async function startRoundWithCourse() {
+  if (!selectedRoundForCourse.value) return
+
+  try {
+    const round = selectedRoundForCourse.value
+    const updates = { status: 'active' }
+
+    // Add course data if selected
+    if (selectedCourse.value) {
+      updates.course_id = selectedCourse.value.id
+      updates.course_name = selectedCourse.value.name
+      updates.slope_rating = courseStore.selectedCourse?.slope_rating || 113
+
+      // Set greenie holes to par 3s if there's greenie money
+      if (round.greenie_amount > 0 && courseStore.holes.length > 0) {
+        const par3s = courseStore.holes.filter(h => h.par === 3).map(h => h.hole_number)
+        updates.greenie_holes = par3s.join(',')
+      }
+    }
+
+    // Update the round
+    await fetch(`/api/tournaments/${round.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates)
+    })
+
+    showCourseSelection.value = false
+    router.push(`/tournament/${round.id}/scorecard`)
+  } catch (err) {
+    console.error('Error starting round:', err)
+  }
+}
+
 async function startRound(round) {
+  // Open course selection if no course set
+  if (!round.course_id) {
+    openCourseSelection(round)
+    return
+  }
+
   try {
     // Update the round status to active
     await fetch(`/api/tournaments/${round.id}`, {
@@ -484,6 +552,103 @@ function getGameTypeLabel(type) {
             Save & Start
           </button>
         </div>
+      </div>
+    </div>
+
+    <!-- Course Selection Modal -->
+    <div v-if="showCourseSelection" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <div class="card max-w-md w-full max-h-[90vh] overflow-y-auto">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-xl font-bold">Select Course</h3>
+          <button @click="showCourseSelection = false" class="text-gray-400">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <p class="text-gray-400 text-sm mb-4">
+          Search for a course to get accurate hole data and par info for {{ selectedRoundForCourse?.name }}
+        </p>
+
+        <!-- Course Search -->
+        <div class="relative mb-4">
+          <input
+            v-model="courseSearch"
+            type="text"
+            placeholder="Search courses..."
+            class="w-full p-3 bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-golf-green"
+          />
+          <div v-if="courseStore.loading" class="absolute right-3 top-3">
+            <svg class="animate-spin w-5 h-5 text-golf-green" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+            </svg>
+          </div>
+        </div>
+
+        <!-- Search Results -->
+        <div v-if="courseStore.searchResults.length && !selectedCourse" class="space-y-2 mb-4 max-h-48 overflow-y-auto">
+          <button
+            v-for="course in courseStore.searchResults"
+            :key="course.id"
+            @click="selectCourseForRound(course)"
+            class="w-full p-3 bg-gray-700 rounded-lg text-left hover:bg-gray-600 transition-colors"
+          >
+            <div class="font-semibold">{{ course.name }}</div>
+            <div class="text-sm text-gray-400">{{ course.city }}, {{ course.state }}</div>
+          </button>
+        </div>
+
+        <!-- Selected Course -->
+        <div v-if="selectedCourse" class="p-4 bg-gray-700 rounded-lg border border-golf-green mb-4">
+          <div class="flex justify-between items-start">
+            <div>
+              <div class="font-bold">{{ selectedCourse.name }}</div>
+              <div class="text-sm text-gray-400">{{ selectedCourse.city }}, {{ selectedCourse.state }}</div>
+            </div>
+            <button @click="selectedCourse = null; courseSearch = ''" class="text-gray-400 hover:text-white">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <!-- Hole Preview -->
+          <div v-if="courseStore.holes.length" class="mt-3 grid grid-cols-9 gap-1 text-xs text-center">
+            <div v-for="hole in courseStore.holes.slice(0, 9)" :key="hole.hole_number" class="bg-gray-600/50 rounded p-1">
+              <div class="text-gray-400">{{ hole.hole_number }}</div>
+              <div class="font-bold">{{ hole.par }}</div>
+            </div>
+          </div>
+          <div v-if="courseStore.holes.length" class="mt-1 grid grid-cols-9 gap-1 text-xs text-center">
+            <div v-for="hole in courseStore.holes.slice(9, 18)" :key="hole.hole_number" class="bg-gray-600/50 rounded p-1">
+              <div class="text-gray-400">{{ hole.hole_number }}</div>
+              <div class="font-bold">{{ hole.par }}</div>
+            </div>
+          </div>
+          <div v-if="courseStore.holes.length" class="mt-2 text-center text-sm text-gray-400">
+            Par {{ courseStore.holes.reduce((sum, h) => sum + h.par, 0) }}
+          </div>
+        </div>
+
+        <!-- Skip Course Selection -->
+        <div class="text-center text-sm text-gray-500 mb-4">
+          <button @click="startRoundWithCourse" class="text-gray-400 hover:text-white underline">
+            Skip and start without course data
+          </button>
+        </div>
+
+        <!-- Action Button -->
+        <button
+          @click="startRoundWithCourse"
+          :disabled="!selectedCourse"
+          :class="[
+            'w-full py-3 rounded-xl font-semibold transition-colors',
+            selectedCourse ? 'bg-golf-green hover:bg-green-600' : 'bg-gray-700 text-gray-500'
+          ]"
+        >
+          {{ selectedCourse ? 'Start Round' : 'Select a Course' }}
+        </button>
       </div>
     </div>
 
