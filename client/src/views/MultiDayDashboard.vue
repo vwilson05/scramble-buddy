@@ -437,6 +437,23 @@ function getRoundStatusLabel(status) {
 function getGameTypeLabel(type) {
   return gameTypes.find(g => g.value === type)?.label || type
 }
+
+// Tee recommendations
+const groupTeeRecommendation = computed(() => {
+  if (!courseStore.teeBoxes.length || !store.players.length) return null
+  return courseStore.getGroupTeeRecommendation(store.players)
+})
+
+function getTeeColorClass(teeName) {
+  if (!teeName) return 'bg-gray-500'
+  const name = teeName.toLowerCase()
+  if (name.includes('black') || name.includes('champion')) return 'bg-gray-900'
+  if (name.includes('blue') || name.includes('back')) return 'bg-blue-600'
+  if (name.includes('white') || name.includes('middle')) return 'bg-white'
+  if (name.includes('gold') || name.includes('yellow') || name.includes('senior')) return 'bg-yellow-400'
+  if (name.includes('red') || name.includes('forward')) return 'bg-red-500'
+  return 'bg-gray-500'
+}
 </script>
 
 <template>
@@ -806,6 +823,35 @@ function getGameTypeLabel(type) {
           <div v-if="courseStore.holes.length" class="mt-2 text-center text-sm text-gray-400">
             Par {{ courseStore.holes.reduce((sum, h) => sum + h.par, 0) }}
           </div>
+
+          <!-- Tee Recommendations -->
+          <div v-if="groupTeeRecommendation && courseStore.teeBoxes.length" class="mt-3 p-2 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+            <div class="flex items-center gap-2">
+              <div :class="['w-5 h-5 rounded-full border-2 border-blue-400', getTeeColorClass(groupTeeRecommendation.name)]"></div>
+              <div class="flex-1">
+                <div class="text-xs font-semibold text-blue-400">Recommended Tees</div>
+                <div class="text-xs text-gray-400">
+                  {{ groupTeeRecommendation.name }}
+                  <span v-if="groupTeeRecommendation.slope"> (Slope: {{ groupTeeRecommendation.slope }})</span>
+                  <span class="text-gray-500"> - {{ groupTeeRecommendation.reason }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Available Tees Info -->
+          <div v-if="courseStore.teeBoxes.length > 1" class="mt-2 flex flex-wrap gap-2 justify-center">
+            <div
+              v-for="tee in courseStore.teeBoxes"
+              :key="tee.name"
+              class="flex items-center gap-1 px-2 py-1 bg-gray-600/50 rounded text-[10px]"
+            >
+              <div :class="['w-3 h-3 rounded-full', getTeeColorClass(tee.name)]"></div>
+              <span class="text-gray-300">{{ tee.name }}</span>
+              <span v-if="tee.slope" class="text-gray-500">({{ tee.slope }})</span>
+            </div>
+          </div>
+
           <!-- Edit Pars Button -->
           <button
             @click="startEditingPars"

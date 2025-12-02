@@ -83,6 +83,28 @@ const isTeamGame = computed(() => requiresTeams.value || (canBeTeams.value && pl
 const par3Holes = computed(() => courseStore.holes.filter(h => h.par === 3))
 const validPlayers = computed(() => players.value.filter(p => p.name.trim()))
 
+// Tee recommendations
+const groupTeeRecommendation = computed(() => {
+  if (!courseStore.teeBoxes.length || !validPlayers.value.length) return null
+  return courseStore.getGroupTeeRecommendation(validPlayers.value)
+})
+
+function getPlayerTeeRecommendation(handicap) {
+  if (!courseStore.teeBoxes.length) return null
+  return courseStore.getRecommendedTee(handicap || 0)
+}
+
+function getTeeColorClass(teeName) {
+  if (!teeName) return 'bg-gray-500'
+  const name = teeName.toLowerCase()
+  if (name.includes('black') || name.includes('champion')) return 'bg-gray-900'
+  if (name.includes('blue') || name.includes('back')) return 'bg-blue-600'
+  if (name.includes('white') || name.includes('middle')) return 'bg-white'
+  if (name.includes('gold') || name.includes('yellow') || name.includes('senior')) return 'bg-yellow-400'
+  if (name.includes('red') || name.includes('forward')) return 'bg-red-500'
+  return 'bg-gray-500'
+}
+
 const teams = computed(() => {
   const teamMap = {}
   for (let i = 1; i <= numTeams.value; i++) {
@@ -770,6 +792,20 @@ function getTeamColorClass(teamNum, type = 'bg') {
       <h2 class="text-2xl font-bold mb-2">Who's playing?</h2>
       <p class="text-gray-400 mb-6">Add players with their handicaps and tees</p>
 
+      <!-- Group Tee Recommendation for Scrambles -->
+      <div v-if="requiresTeams && groupTeeRecommendation && validPlayers.length >= 2" class="mb-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-xl">
+        <div class="flex items-center gap-3">
+          <div :class="['w-6 h-6 rounded-full border-2 border-blue-400', getTeeColorClass(groupTeeRecommendation.name)]"></div>
+          <div class="flex-1">
+            <div class="text-sm font-semibold text-blue-400">Recommended for Group</div>
+            <div class="text-xs text-gray-400">
+              {{ groupTeeRecommendation.name }} tees ({{ groupTeeRecommendation.reason }})
+              <span v-if="groupTeeRecommendation.slope" class="text-gray-500"> - Slope: {{ groupTeeRecommendation.slope }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="space-y-3 mb-4">
         <div v-for="(player, index) in players" :key="index" class="card p-3">
           <div class="flex gap-2 items-center mb-2">
@@ -841,6 +877,12 @@ function getTeamColorClass(teamNum, type = 'bg') {
                   ]"
                   :title="tee.label"
                 ></button>
+              </div>
+              <!-- Individual tee recommendation -->
+              <div v-if="player.handicap && getPlayerTeeRecommendation(player.handicap)" class="mt-1">
+                <span class="text-[10px] text-blue-400">
+                  Rec: {{ getPlayerTeeRecommendation(player.handicap).name }}
+                </span>
               </div>
             </div>
           </div>
