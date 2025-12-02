@@ -295,6 +295,59 @@ function generateDefaultHoles() {
   }))
 }
 
+// Create a custom course
+router.post('/custom', (req, res) => {
+  try {
+    const { name, holes } = req.body
+
+    if (!name || !holes || holes.length !== 18) {
+      return res.status(400).json({ error: 'Name and 18 holes required' })
+    }
+
+    // Generate a unique ID for the custom course
+    const courseId = `custom-${name.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${Date.now()}`
+
+    // Insert the course
+    db.prepare(`
+      INSERT INTO courses (id, name, city, state, country, slope_rating, course_rating, data)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      courseId,
+      name,
+      'Custom',
+      '',
+      'USA',
+      113,
+      72,
+      JSON.stringify({ custom: true })
+    )
+
+    // Insert the holes
+    for (const hole of holes) {
+      db.prepare(`
+        INSERT INTO holes (course_id, hole_number, par, handicap_rating, manual_override)
+        VALUES (?, ?, ?, ?, 1)
+      `).run(
+        courseId,
+        hole.hole_number,
+        hole.par,
+        hole.handicap_rating || hole.hole_number
+      )
+    }
+
+    const savedHoles = db.prepare('SELECT * FROM holes WHERE course_id = ? ORDER BY hole_number').all(courseId)
+
+    res.status(201).json({
+      id: courseId,
+      name,
+      holes: savedHoles
+    })
+  } catch (error) {
+    console.error('Error creating custom course:', error)
+    res.status(500).json({ error: error.message })
+  }
+})
+
 // Update a single hole's data
 router.put('/:courseId/holes/:holeNumber', (req, res) => {
   try {

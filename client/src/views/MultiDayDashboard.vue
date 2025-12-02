@@ -94,12 +94,129 @@ const selectedRoundForCourse = ref(null)
 const courseSearch = ref('')
 const selectedCourse = ref(null)
 
+// Custom scorecard / edit pars
+const showCustomScorecard = ref(false)
+const customCourseName = ref('')
+const editableHoles = ref([])
+const editingPars = ref(false)
+
+// Tournament editing
+const showEditTournament = ref(false)
+const editForm = ref({
+  name: '',
+  num_days: 1,
+  num_rounds: 1,
+  point_system: []
+})
+
+// New player form for editing
+const newPlayerName = ref('')
+const newPlayerHandicap = ref('')
+
+function openEditTournament() {
+  if (tournament.value) {
+    editForm.value = {
+      name: tournament.value.name,
+      num_days: tournament.value.num_days,
+      num_rounds: tournament.value.num_rounds,
+      point_system: JSON.parse(tournament.value.point_system || '[]')
+    }
+  }
+  showEditTournament.value = true
+}
+
+async function saveEditTournament() {
+  try {
+    await store.updateMultiDay(multiDayId.value, {
+      name: editForm.value.name,
+      num_days: editForm.value.num_days,
+      num_rounds: editForm.value.num_rounds,
+      point_system: editForm.value.point_system
+    })
+    await store.fetchMultiDay(multiDayId.value)
+    showEditTournament.value = false
+  } catch (err) {
+    console.error('Error saving tournament:', err)
+  }
+}
+
+async function addPlayerToTournament() {
+  if (!newPlayerName.value.trim()) return
+
+  try {
+    await store.addPlayer(multiDayId.value, {
+      name: newPlayerName.value.trim(),
+      handicap: parseFloat(newPlayerHandicap.value) || 0
+    })
+    newPlayerName.value = ''
+    newPlayerHandicap.value = ''
+    await store.fetchMultiDay(multiDayId.value)
+  } catch (err) {
+    console.error('Error adding player:', err)
+  }
+}
+
+async function removePlayerFromTournament(playerId) {
+  try {
+    await store.removePlayer(multiDayId.value, playerId)
+    await store.fetchMultiDay(multiDayId.value)
+  } catch (err) {
+    console.error('Error removing player:', err)
+  }
+}
+
+async function updatePlayerHandicap(player, newHandicap) {
+  try {
+    await store.updatePlayer(multiDayId.value, player.id, {
+      handicap: parseFloat(newHandicap) || 0
+    })
+  } catch (err) {
+    console.error('Error updating player:', err)
+  }
+}
+
 // Watch for course search
 watch(courseSearch, async (query) => {
   if (query.length >= 2) {
     await courseStore.searchCourses(query)
   }
 })
+
+// Initialize default holes for custom scorecard
+function initCustomHoles() {
+  editableHoles.value = Array.from({ length: 18 }, (_, i) => ({
+    hole_number: i + 1,
+    par: 4,
+    handicap_rating: i + 1
+  }))
+}
+
+function openCustomScorecard() {
+  customCourseName.value = ''
+  initCustomHoles()
+  showCustomScorecard.value = true
+}
+
+function startEditingPars() {
+  editableHoles.value = courseStore.holes.map(h => ({
+    hole_number: h.hole_number,
+    par: h.par,
+    handicap_rating: h.handicap_rating || h.hole_number
+  }))
+  editingPars.value = true
+}
+
+function cancelEditPars() {
+  editingPars.value = false
+  editableHoles.value = []
+}
+
+async function saveEditedPars() {
+  if (selectedCourse.value) {
+    await courseStore.updateHoles(selectedCourse.value.id, editableHoles.value)
+  }
+  editingPars.value = false
+}
 
 function openCourseSelection(round) {
   selectedRoundForCourse.value = round
@@ -127,9 +244,14 @@ async function startRoundWithCourse() {
       updates.course_name = selectedCourse.value.name
       updates.slope_rating = courseStore.selectedCourse?.slope_rating || 113
 
+      // Use edited pars if available, otherwise use course holes
+      const holes = editingPars.value && editableHoles.value.length > 0
+        ? editableHoles.value
+        : courseStore.holes
+
       // Set greenie holes to par 3s if there's greenie money
-      if (round.greenie_amount > 0 && courseStore.holes.length > 0) {
-        const par3s = courseStore.holes.filter(h => h.par === 3).map(h => h.hole_number)
+      if (round.greenie_amount > 0 && holes.length > 0) {
+        const par3s = holes.filter(h => h.par === 3).map(h => h.hole_number)
         updates.greenie_holes = par3s.join(',')
       }
     }
@@ -142,9 +264,56 @@ async function startRoundWithCourse() {
     })
 
     showCourseSelection.value = false
+    editingPars.value = false
     router.push(`/tournament/${round.id}/scorecard`)
   } catch (err) {
     console.error('Error starting round:', err)
+  }
+}
+
+async function startRoundWithCustomCourse() {
+  if (!selectedRoundForCourse.value || !customCourseName.value.trim()) return
+
+  try {
+    const round = selectedRoundForCourse.value
+
+    // Create custom course in database
+    const courseResponse = await fetch('/api/courses/custom', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: customCourseName.value.trim(),
+        holes: editableHoles.value
+      })
+    })
+
+    const courseData = await courseResponse.json()
+
+    // Update round with custom course
+    const updates = {
+      status: 'active',
+      course_id: courseData.id,
+      course_name: customCourseName.value.trim(),
+      slope_rating: 113
+    }
+
+    // Set greenie holes to par 3s
+    if (round.greenie_amount > 0) {
+      const par3s = editableHoles.value.filter(h => h.par === 3).map(h => h.hole_number)
+      updates.greenie_holes = par3s.join(',')
+    }
+
+    await fetch(`/api/tournaments/${round.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates)
+    })
+
+    showCustomScorecard.value = false
+    showCourseSelection.value = false
+    router.push(`/tournament/${round.id}/scorecard`)
+  } catch (err) {
+    console.error('Error starting round with custom course:', err)
   }
 }
 
@@ -293,11 +462,19 @@ function getGameTypeLabel(type) {
             {{ tournament?.num_rounds }} rounds over {{ tournament?.num_days }} days
           </div>
         </div>
-        <button @click="shareLink" class="text-gold p-1">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-          </svg>
-        </button>
+        <div class="flex items-center gap-2">
+          <button @click="openEditTournament" class="text-gray-400 hover:text-white p-1">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          </button>
+          <button @click="shareLink" class="text-gold p-1">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+            </svg>
+          </button>
+        </div>
       </div>
     </div>
 
@@ -601,7 +778,7 @@ function getGameTypeLabel(type) {
         </div>
 
         <!-- Selected Course -->
-        <div v-if="selectedCourse" class="p-4 bg-gray-700 rounded-lg border border-golf-green mb-4">
+        <div v-if="selectedCourse && !editingPars" class="p-4 bg-gray-700 rounded-lg border border-golf-green mb-4">
           <div class="flex justify-between items-start">
             <div>
               <div class="font-bold">{{ selectedCourse.name }}</div>
@@ -629,6 +806,66 @@ function getGameTypeLabel(type) {
           <div v-if="courseStore.holes.length" class="mt-2 text-center text-sm text-gray-400">
             Par {{ courseStore.holes.reduce((sum, h) => sum + h.par, 0) }}
           </div>
+          <!-- Edit Pars Button -->
+          <button
+            @click="startEditingPars"
+            class="mt-3 w-full py-2 bg-gray-600 rounded-lg text-sm hover:bg-gray-500 transition-colors"
+          >
+            Edit Pars
+          </button>
+        </div>
+
+        <!-- Editing Pars -->
+        <div v-if="selectedCourse && editingPars" class="p-4 bg-gray-700 rounded-lg border border-gold mb-4">
+          <div class="flex justify-between items-start mb-3">
+            <div>
+              <div class="font-bold">{{ selectedCourse.name }}</div>
+              <div class="text-xs text-gold">Editing pars...</div>
+            </div>
+          </div>
+          <!-- Editable Holes Grid -->
+          <div class="grid grid-cols-9 gap-1 text-xs text-center mb-1">
+            <div v-for="hole in editableHoles.slice(0, 9)" :key="hole.hole_number" class="bg-gray-600/50 rounded p-1">
+              <div class="text-gray-400">{{ hole.hole_number }}</div>
+              <select v-model="hole.par" class="w-full bg-transparent text-center font-bold focus:outline-none">
+                <option :value="3">3</option>
+                <option :value="4">4</option>
+                <option :value="5">5</option>
+              </select>
+            </div>
+          </div>
+          <div class="grid grid-cols-9 gap-1 text-xs text-center">
+            <div v-for="hole in editableHoles.slice(9, 18)" :key="hole.hole_number" class="bg-gray-600/50 rounded p-1">
+              <div class="text-gray-400">{{ hole.hole_number }}</div>
+              <select v-model="hole.par" class="w-full bg-transparent text-center font-bold focus:outline-none">
+                <option :value="3">3</option>
+                <option :value="4">4</option>
+                <option :value="5">5</option>
+              </select>
+            </div>
+          </div>
+          <div class="mt-2 text-center text-sm text-gray-400">
+            Par {{ editableHoles.reduce((sum, h) => sum + h.par, 0) }}
+          </div>
+          <div class="mt-3 flex gap-2">
+            <button @click="cancelEditPars" class="flex-1 py-2 text-sm text-gray-400 hover:text-white">
+              Cancel
+            </button>
+            <button @click="saveEditedPars" class="flex-1 py-2 bg-gold text-dark rounded-lg text-sm font-semibold">
+              Save Pars
+            </button>
+          </div>
+        </div>
+
+        <!-- Custom Scorecard Option -->
+        <div class="mb-4 p-3 bg-gray-800 rounded-lg border border-dashed border-gray-600">
+          <div class="text-sm text-gray-400 mb-2">Course not in database?</div>
+          <button
+            @click="openCustomScorecard"
+            class="w-full py-2 bg-purple-600/20 border border-purple-500/50 rounded-lg text-purple-400 text-sm hover:bg-purple-600/30 transition-colors"
+          >
+            Create Custom Scorecard
+          </button>
         </div>
 
         <!-- Skip Course Selection -->
@@ -648,6 +885,75 @@ function getGameTypeLabel(type) {
           ]"
         >
           {{ selectedCourse ? 'Start Round' : 'Select a Course' }}
+        </button>
+      </div>
+    </div>
+
+    <!-- Custom Scorecard Modal -->
+    <div v-if="showCustomScorecard" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <div class="card max-w-md w-full max-h-[90vh] overflow-y-auto">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-xl font-bold">Custom Scorecard</h3>
+          <button @click="showCustomScorecard = false" class="text-gray-400">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <p class="text-gray-400 text-sm mb-4">
+          Create a custom scorecard for a course not in our database.
+        </p>
+
+        <!-- Course Name -->
+        <div class="mb-4">
+          <label class="block text-sm text-gray-400 mb-1">Course Name</label>
+          <input
+            v-model="customCourseName"
+            type="text"
+            placeholder="e.g., Desert Springs Golf Club"
+            class="w-full p-3 bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+          />
+        </div>
+
+        <!-- Editable Holes -->
+        <div class="mb-4">
+          <label class="block text-sm text-gray-400 mb-2">Set Par for Each Hole</label>
+          <div class="grid grid-cols-9 gap-1 text-xs text-center mb-1">
+            <div v-for="hole in editableHoles.slice(0, 9)" :key="hole.hole_number" class="bg-gray-700 rounded p-1">
+              <div class="text-gray-400">{{ hole.hole_number }}</div>
+              <select v-model="hole.par" class="w-full bg-transparent text-center font-bold focus:outline-none">
+                <option :value="3">3</option>
+                <option :value="4">4</option>
+                <option :value="5">5</option>
+              </select>
+            </div>
+          </div>
+          <div class="grid grid-cols-9 gap-1 text-xs text-center">
+            <div v-for="hole in editableHoles.slice(9, 18)" :key="hole.hole_number" class="bg-gray-700 rounded p-1">
+              <div class="text-gray-400">{{ hole.hole_number }}</div>
+              <select v-model="hole.par" class="w-full bg-transparent text-center font-bold focus:outline-none">
+                <option :value="3">3</option>
+                <option :value="4">4</option>
+                <option :value="5">5</option>
+              </select>
+            </div>
+          </div>
+          <div class="mt-2 text-center text-sm text-gray-400">
+            Par {{ editableHoles.reduce((sum, h) => sum + h.par, 0) }}
+          </div>
+        </div>
+
+        <!-- Action Button -->
+        <button
+          @click="startRoundWithCustomCourse"
+          :disabled="!customCourseName.trim()"
+          :class="[
+            'w-full py-3 rounded-xl font-semibold transition-colors',
+            customCourseName.trim() ? 'bg-purple-600 hover:bg-purple-700' : 'bg-gray-700 text-gray-500'
+          ]"
+        >
+          Create & Start Round
         </button>
       </div>
     </div>
@@ -763,6 +1069,139 @@ function getGameTypeLabel(type) {
           </button>
           <button @click="createRound" class="flex-1 py-3 bg-golf-green rounded-xl font-semibold">
             Create Round
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Edit Tournament Modal -->
+    <div v-if="showEditTournament" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <div class="card max-w-md w-full max-h-[90vh] overflow-y-auto">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-xl font-bold">Edit Tournament</h3>
+          <button @click="showEditTournament = false" class="text-gray-400">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div class="space-y-4">
+          <!-- Tournament Name -->
+          <div>
+            <label class="block text-sm text-gray-400 mb-2">Tournament Name</label>
+            <input
+              v-model="editForm.name"
+              type="text"
+              class="w-full p-3 bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-golf-green"
+            />
+          </div>
+
+          <!-- Days & Rounds -->
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm text-gray-400 mb-2">Days</label>
+              <input
+                v-model.number="editForm.num_days"
+                type="number"
+                min="1"
+                class="w-full p-3 bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-golf-green"
+              />
+            </div>
+            <div>
+              <label class="block text-sm text-gray-400 mb-2">Rounds</label>
+              <input
+                v-model.number="editForm.num_rounds"
+                type="number"
+                min="1"
+                class="w-full p-3 bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-golf-green"
+              />
+            </div>
+          </div>
+
+          <!-- Players Section -->
+          <div>
+            <label class="block text-sm text-gray-400 mb-2">Players</label>
+
+            <!-- Add Player -->
+            <div class="flex gap-2 mb-3">
+              <input
+                v-model="newPlayerName"
+                type="text"
+                placeholder="Player name"
+                class="flex-1 p-2 bg-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-golf-green"
+                @keyup.enter="addPlayerToTournament"
+              />
+              <input
+                v-model="newPlayerHandicap"
+                type="number"
+                placeholder="HCP"
+                class="w-16 p-2 bg-gray-700 rounded-lg text-sm text-center focus:outline-none focus:ring-2 focus:ring-golf-green"
+              />
+              <button
+                @click="addPlayerToTournament"
+                :disabled="!newPlayerName.trim()"
+                class="px-3 py-2 bg-golf-green rounded-lg text-sm font-semibold disabled:opacity-50"
+              >
+                Add
+              </button>
+            </div>
+
+            <!-- Player List -->
+            <div class="space-y-2 max-h-40 overflow-y-auto">
+              <div
+                v-for="player in store.players"
+                :key="player.id"
+                class="flex items-center justify-between p-2 bg-gray-700 rounded-lg"
+              >
+                <div class="flex items-center gap-2">
+                  <span class="font-medium">{{ player.name }}</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <input
+                    :value="player.handicap"
+                    @change="updatePlayerHandicap(player, $event.target.value)"
+                    type="number"
+                    class="w-14 p-1 bg-gray-600 rounded text-sm text-center focus:outline-none"
+                  />
+                  <button @click="removePlayerFromTournament(player.id)" class="text-red-400 hover:text-red-300">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Point System -->
+          <div>
+            <label class="block text-sm text-gray-400 mb-2">Point System</label>
+            <div class="space-y-2 max-h-32 overflow-y-auto">
+              <div
+                v-for="(point, index) in editForm.point_system"
+                :key="index"
+                class="flex items-center gap-2"
+              >
+                <span class="text-sm text-gray-400 w-12">{{ index + 1 }}{{ index === 0 ? 'st' : index === 1 ? 'nd' : index === 2 ? 'rd' : 'th' }}</span>
+                <input
+                  v-model.number="point.points"
+                  type="number"
+                  min="0"
+                  class="flex-1 p-2 bg-gray-700 rounded-lg text-sm text-center focus:outline-none focus:ring-2 focus:ring-golf-green"
+                />
+                <span class="text-sm text-gray-500">pts</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex gap-3 mt-6">
+          <button @click="showEditTournament = false" class="flex-1 py-3 bg-gray-700 rounded-xl font-semibold">
+            Cancel
+          </button>
+          <button @click="saveEditTournament" class="flex-1 py-3 bg-golf-green rounded-xl font-semibold">
+            Save Changes
           </button>
         </div>
       </div>
