@@ -135,7 +135,11 @@ function openEditTournament() {
   showEditTournament.value = true
 }
 
+const savingTournament = ref(false)
+
 async function saveEditTournament() {
+  if (savingTournament.value) return
+  savingTournament.value = true
   try {
     await store.updateMultiDay(multiDayId.value, {
       name: editForm.value.name,
@@ -148,6 +152,9 @@ async function saveEditTournament() {
     showEditTournament.value = false
   } catch (err) {
     console.error('Error saving tournament:', err)
+    alert('Error saving: ' + (err.message || 'Unknown error'))
+  } finally {
+    savingTournament.value = false
   }
 }
 
@@ -1330,8 +1337,12 @@ function getTeeColorClass(teeName) {
           <button @click="showEditTournament = false" class="flex-1 py-3 bg-gray-700 rounded-xl font-semibold">
             Cancel
           </button>
-          <button @click="saveEditTournament" class="flex-1 py-3 bg-golf-green rounded-xl font-semibold">
-            Save Changes
+          <button
+            @click="saveEditTournament"
+            :disabled="savingTournament"
+            class="flex-1 py-3 bg-golf-green rounded-xl font-semibold disabled:opacity-50"
+          >
+            {{ savingTournament ? 'Saving...' : 'Save Changes' }}
           </button>
         </div>
       </div>
