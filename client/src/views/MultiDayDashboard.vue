@@ -116,11 +116,18 @@ const newPlayerHandicap = ref('')
 
 function openEditTournament() {
   if (tournament.value) {
+    let pointSystem = []
+    try {
+      pointSystem = JSON.parse(tournament.value.point_system || '[]')
+    } catch (e) {
+      // Default point system if parsing fails
+      pointSystem = []
+    }
     editForm.value = {
       name: tournament.value.name,
       num_days: tournament.value.num_days,
       num_rounds: tournament.value.num_rounds,
-      point_system: JSON.parse(tournament.value.point_system || '[]')
+      point_system: pointSystem
     }
   }
   showEditTournament.value = true
