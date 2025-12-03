@@ -329,8 +329,11 @@ function getHolePars() {
             <div class="text-xs text-gray-400">
               <span v-if="entry.player?.courseHandicap !== undefined">
                 {{ entry.player.courseHandicap }} HCP
-                <span v-if="entry.player.courseHandicap > 0" class="text-golf-green">
-                  ({{ entry.player.courseHandicap }} strokes)
+                <span v-if="(entry.player.displayHandicap ?? entry.player.courseHandicap) > 0" class="text-golf-green">
+                  ({{ entry.player.displayHandicap ?? entry.player.courseHandicap }} strokes)
+                </span>
+                <span v-else-if="entry.player.courseHandicap > 0" class="text-gray-500">
+                  (0 strokes - lowest)
                 </span>
               </span>
               <span v-if="entry.holesPlayed"> • {{ entry.holesPlayed }} holes</span>

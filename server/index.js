@@ -77,7 +77,7 @@ app.use((err, req, res, next) => {
 
 app.listen(PORT, () => {
   console.log(`
-  ⛳ Scramble Buddy Server running on port ${PORT}
+  ⛳ 18Eagles Server running on port ${PORT}
   📍 API: http://localhost:${PORT}/api
   ${isProduction ? '🌐 Serving client from /client/dist' : '🔧 Development mode'}
   `)

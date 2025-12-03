@@ -68,15 +68,15 @@ router.post('/send-results', async (req, res) => {
     }
 
     const mailOptions = {
-      from: process.env.EMAIL_FROM || process.env.GMAIL_USER || '"Scramble Buddy" <results@scramblebuddy.app>',
+      from: process.env.EMAIL_FROM || process.env.GMAIL_USER || '"18Eagles" <results@18eagles.app>',
       to: email,
       subject: `${tournamentName || 'Golf Round'} - Results`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <div style="background: linear-gradient(135deg, #1a1a2e, #16213e); padding: 30px; text-align: center;">
             <h1 style="margin: 0;">
-              <span style="color: #228B22; font-size: 28px;">Scramble</span>
-              <span style="color: #FFD700; font-size: 28px;">Buddy</span>
+              <span style="color: #228B22; font-size: 28px;">18</span>
+              <span style="color: #FFD700; font-size: 28px;">Eagles</span>
             </h1>
           </div>
           <div style="padding: 30px; background: #f9f9f9;">
@@ -91,7 +91,7 @@ router.post('/send-results', async (req, res) => {
             </p>
             <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
             <p style="font-size: 12px; color: #999; text-align: center;">
-              Sent via Scramble Buddy - The best golf tournament app for you and your buddies
+              Sent via 18Eagles - The best golf tournament app for you and your buddies
             </p>
           </div>
         </div>

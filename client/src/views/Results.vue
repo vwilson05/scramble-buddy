@@ -82,7 +82,7 @@ function shareResults() {
 
   if (navigator.share) {
     navigator.share({
-      title: 'Scramble Buddy Results',
+      title: '18Eagles Results',
       text
     })
   } else {

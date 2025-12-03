@@ -60,6 +60,11 @@ export function initializeDatabase(db) {
     db.exec(`ALTER TABLE tournaments ADD COLUMN nassau_overall_bet REAL`)
   } catch (e) { /* column already exists */ }
 
+  // Add handicap_mode column ('gross' = full strokes, 'net' = relative to lowest)
+  try {
+    db.exec(`ALTER TABLE tournaments ADD COLUMN handicap_mode TEXT DEFAULT 'gross'`)
+  } catch (e) { /* column already exists */ }
+
   // Side bets table - flexible mini-tournaments between any parties
   // Each side bet is like its own game with its own format
   // Presses create NEW side_bet entries with parent_bet_id set

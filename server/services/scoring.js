@@ -11,12 +11,58 @@ function calculateCourseHandicap(handicapIndex, slopeRating = 113) {
 }
 
 /**
- * Get strokes received on a hole
- * Note: No strokes given on par 3s (common rule)
+ * Build stroke allocation map for a player's handicap
+ * Fair allocation: non-par-3s first (by difficulty), then par-3s, then double up
+ * @param {number} courseHandicap - Player's course handicap
+ * @param {Array} holes - Array of hole objects with { hole_number, par, handicap_rating }
+ * @returns {Object} Map of hole_number -> strokes on that hole
  */
-function getStrokesOnHole(courseHandicap, holeHandicapRating, holePar) {
+function buildStrokeAllocationMap(courseHandicap, holes) {
+  if (courseHandicap <= 0 || !holes || holes.length === 0) return {}
+
+  // Separate holes into non-par-3s and par-3s, sorted by handicap rating (hardest first)
+  const nonPar3s = holes.filter(h => h.par !== 3).sort((a, b) => (a.handicap_rating || 99) - (b.handicap_rating || 99))
+  const par3s = holes.filter(h => h.par === 3).sort((a, b) => (a.handicap_rating || 99) - (b.handicap_rating || 99))
+
+  // Build allocation order: non-par-3s first, then par-3s
+  const allocationOrder = [...nonPar3s, ...par3s]
+
+  // Initialize stroke map
+  const strokeMap = {}
+  holes.forEach(h => { strokeMap[h.hole_number] = 0 })
+
+  let remainingStrokes = courseHandicap
+  let passNumber = 0
+
+  // Keep allocating until all strokes are distributed
+  while (remainingStrokes > 0) {
+    for (const hole of allocationOrder) {
+      if (remainingStrokes <= 0) break
+      strokeMap[hole.hole_number]++
+      remainingStrokes--
+    }
+    passNumber++
+    // Safety: prevent infinite loop (max 5 strokes per hole)
+    if (passNumber > 5) break
+  }
+
+  return strokeMap
+}
+
+/**
+ * Get strokes received on a hole (legacy simple version for backward compatibility)
+ * Uses fair allocation when holes data is available
+ */
+function getStrokesOnHole(courseHandicap, holeHandicapRating, holePar, allHoles = null, holeNumber = null) {
   if (courseHandicap <= 0) return 0
-  if (holePar === 3) return 0 // No strokes on par 3s
+
+  // If we have full holes data, use fair allocation
+  if (allHoles && allHoles.length > 0 && holeNumber !== null) {
+    const strokeMap = buildStrokeAllocationMap(courseHandicap, allHoles)
+    return strokeMap[holeNumber] || 0
+  }
+
+  // Legacy fallback: simple allocation without par-3 exclusion
   const fullStrokes = Math.floor(courseHandicap / 18)
   const remainingStrokes = courseHandicap % 18
   return fullStrokes + (holeHandicapRating <= remainingStrokes ? 1 : 0)
@@ -35,6 +81,7 @@ function calculateNetScore(grossScore, courseHandicap, holeHandicapRating, holeP
 export function calculateLeaderboard(tournament, players, scores, holes) {
   const slopeRating = tournament.slope_rating || 113
   const greenieHoles = tournament.greenie_holes ? tournament.greenie_holes.split(',').map(Number) : []
+  const handicapMode = tournament.handicap_mode || 'gross' // 'gross' or 'net'
 
   // Build a map for quick hole lookup
   const holeMap = {}
@@ -45,9 +92,42 @@ export function calculateLeaderboard(tournament, players, scores, holes) {
   const front9Par = holes.filter(h => h.hole_number <= 9).reduce((sum, h) => sum + h.par, 0)
   const back9Par = holes.filter(h => h.hole_number > 9).reduce((sum, h) => sum + h.par, 0)
 
+  // Calculate course handicaps for all players
+  const courseHandicaps = {}
+  players.forEach(p => {
+    courseHandicaps[p.id] = calculateCourseHandicap(p.handicap, slopeRating)
+  })
+
+  // For net mode: find lowest course handicap and calculate relative handicaps
+  let lowestHandicap = 0
+  let displayHandicaps = {} // What we show as "playing handicap" (strokes received)
+
+  if (handicapMode === 'net') {
+    const handicapValues = Object.values(courseHandicaps).filter(h => h >= 0)
+    lowestHandicap = handicapValues.length > 0 ? Math.min(...handicapValues) : 0
+
+    // Each player's display handicap is relative to lowest
+    players.forEach(p => {
+      displayHandicaps[p.id] = Math.max(0, courseHandicaps[p.id] - lowestHandicap)
+    })
+  } else {
+    // Gross mode: display handicap = course handicap
+    players.forEach(p => {
+      displayHandicaps[p.id] = courseHandicaps[p.id]
+    })
+  }
+
+  // Build stroke allocation maps using the DISPLAY handicaps (for dots on scorecard)
+  const strokeMaps = {}
+  players.forEach(p => {
+    strokeMaps[p.id] = buildStrokeAllocationMap(displayHandicaps[p.id], holes)
+  })
+
   // Calculate each player's stats
   const playerStats = players.map(player => {
-    const courseHandicap = calculateCourseHandicap(player.handicap, slopeRating)
+    const courseHandicap = courseHandicaps[player.id]
+    const displayHandicap = displayHandicaps[player.id]
+    const strokeMap = strokeMaps[player.id]
     const playerScores = scores.filter(s => s.player_id === player.id)
 
     let grossTotal = 0
@@ -69,10 +149,13 @@ export function calculateLeaderboard(tournament, players, scores, holes) {
     for (let i = 1; i <= 18; i++) {
       const score = playerScores.find(s => s.hole_number === i)
       const hole = holeMap[i]
+      // Use strokeMap for fair allocation (strokes displayed as dots)
+      const holeStrokes = strokeMap[i] || 0
 
       if (score && score.strokes && hole) {
         const gross = score.strokes
-        const net = calculateNetScore(gross, courseHandicap, hole.handicap_rating, hole.par)
+        // Net score uses the strokes from the map (which respects handicap mode)
+        const net = gross - holeStrokes
         const diff = gross - hole.par
 
         grossTotal += gross
@@ -104,7 +187,7 @@ export function calculateLeaderboard(tournament, players, scores, holes) {
           gross,
           net,
           par: hole.par,
-          strokes: getStrokesOnHole(courseHandicap, hole.handicap_rating, hole.par),
+          strokes: holeStrokes, // Fair allocation strokes (dots on scorecard)
           greenie: score.greenie,
           greenieDistance: score.greenie_distance
         })
@@ -114,7 +197,7 @@ export function calculateLeaderboard(tournament, players, scores, holes) {
           gross: null,
           net: null,
           par: hole?.par || 4,
-          strokes: hole ? getStrokesOnHole(courseHandicap, hole.handicap_rating, hole.par) : 0
+          strokes: holeStrokes
         })
       }
     }
@@ -125,6 +208,7 @@ export function calculateLeaderboard(tournament, players, scores, holes) {
         name: player.name,
         handicap: player.handicap,
         courseHandicap,
+        displayHandicap, // Strokes shown (net mode = relative, gross = full)
         team: player.team,
         tee_color: player.tee_color
       },
@@ -173,7 +257,9 @@ export function calculateLeaderboard(tournament, players, scores, holes) {
     front9Par,
     back9Par,
     greenieHoles,
-    gameType: tournament.game_type
+    gameType: tournament.game_type,
+    handicapMode, // 'gross' or 'net'
+    lowestHandicap // Only relevant in net mode
   }
 }
 
@@ -371,15 +457,37 @@ function calculateBetSettlements(leaderboard, tournament) {
 export function calculateHighLowStandings(tournament, team1Players, team2Players, scores, holes) {
   const slopeRating = tournament.slope_rating || 113
   const nassauFormat = tournament.nassau_format || '6-6-6'
+  const handicapMode = tournament.handicap_mode || 'gross'
 
   // Build hole map
   const holeMap = {}
   holes.forEach(h => { holeMap[h.hole_number] = h })
 
   // Calculate course handicaps
-  const handicaps = {}
-  ;[...team1Players, ...team2Players].forEach(p => {
-    handicaps[p.id] = calculateCourseHandicap(p.handicap, slopeRating)
+  const allPlayers = [...team1Players, ...team2Players]
+  const courseHandicaps = {}
+  allPlayers.forEach(p => {
+    courseHandicaps[p.id] = calculateCourseHandicap(p.handicap, slopeRating)
+  })
+
+  // For net mode: calculate relative handicaps
+  let displayHandicaps = {}
+  if (handicapMode === 'net') {
+    const handicapValues = Object.values(courseHandicaps).filter(h => h >= 0)
+    const lowestHandicap = handicapValues.length > 0 ? Math.min(...handicapValues) : 0
+    allPlayers.forEach(p => {
+      displayHandicaps[p.id] = Math.max(0, courseHandicaps[p.id] - lowestHandicap)
+    })
+  } else {
+    allPlayers.forEach(p => {
+      displayHandicaps[p.id] = courseHandicaps[p.id]
+    })
+  }
+
+  // Build stroke allocation maps with fair allocation
+  const strokeMaps = {}
+  allPlayers.forEach(p => {
+    strokeMaps[p.id] = buildStrokeAllocationMap(displayHandicaps[p.id], holes)
   })
 
   // Initialize results
@@ -406,11 +514,11 @@ export function calculateHighLowStandings(tournament, team1Players, team2Players
     const hole = holeMap[holeNum]
     if (!hole) continue
 
-    // Get net scores for each player on this hole
+    // Get net scores for each player on this hole using fair allocation
     const getNetScore = (playerId) => {
       const score = scores.find(s => s.player_id === playerId && s.hole_number === holeNum)
       if (!score || !score.strokes) return null
-      const strokes = getStrokesOnHole(handicaps[playerId], hole.handicap_rating, hole.par)
+      const strokes = strokeMaps[playerId][holeNum] || 0
       return score.strokes - strokes
     }
 

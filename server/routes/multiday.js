@@ -130,8 +130,8 @@ router.post('/', (req, res) => {
         INSERT INTO tournaments (
           name, date, game_type, status, course_name, slope_rating,
           bet_amount, greenie_amount, skins_amount, greenie_holes, nassau_format,
-          is_team_game, multi_day_id, day_number, round_number, slug, selfie_hole
-        ) VALUES (?, ?, ?, 'scheduled', ?, 113, ?, ?, 0, ?, '6-6-6', 0, ?, ?, ?, ?, ?)
+          is_team_game, multi_day_id, day_number, round_number, slug, selfie_hole, handicap_mode
+        ) VALUES (?, ?, ?, 'scheduled', ?, 113, ?, ?, 0, ?, '6-6-6', 0, ?, ?, ?, ?, ?, ?)
       `)
 
       const insertRoundPlayer = db.prepare(`
@@ -158,7 +158,8 @@ router.post('/', (req, res) => {
           round.day_number || 1,
           round.round_number,
           roundSlug,
-          selfieHole
+          selfieHole,
+          round.handicap_mode || 'gross'
         )
 
         // Copy players to this round
@@ -296,7 +297,8 @@ router.post('/:id/rounds', (req, res) => {
       greenie_amount,
       skins_amount,
       greenie_holes,
-      is_team_game
+      is_team_game,
+      handicap_mode
     } = req.body
 
     // Get multi-day tournament
@@ -314,8 +316,8 @@ router.post('/:id/rounds', (req, res) => {
       INSERT INTO tournaments (
         name, date, game_type, status, course_id, course_name, slope_rating,
         bet_amount, greenie_amount, skins_amount, greenie_holes, nassau_format,
-        is_team_game, multi_day_id, day_number, round_number, slug, selfie_hole
-      ) VALUES (?, ?, ?, 'setup', ?, ?, 113, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        is_team_game, multi_day_id, day_number, round_number, slug, selfie_hole, handicap_mode
+      ) VALUES (?, ?, ?, 'setup', ?, ?, 113, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       name || `${multiDay.name} - Round ${round_number}`,
       date || multiDay.start_date,
@@ -332,7 +334,8 @@ router.post('/:id/rounds', (req, res) => {
       day_number || 1,
       round_number || 1,
       slug,
-      selfieHole
+      selfieHole,
+      handicap_mode || 'gross'
     )
 
     const tournamentId = result.lastInsertRowid

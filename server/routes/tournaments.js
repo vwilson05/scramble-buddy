@@ -87,7 +87,8 @@ router.post('/', (req, res) => {
       greenie_holes,
       nassau_format,
       is_team_game,
-      payout_config
+      payout_config,
+      handicap_mode
     } = req.body
 
     const slug = generateSlug(name || 'round')
@@ -96,8 +97,8 @@ router.post('/', (req, res) => {
     const selfieHole = Math.floor(Math.random() * 12) + 4
 
     const result = db.prepare(`
-      INSERT INTO tournaments (name, date, game_type, course_id, course_name, slope_rating, bet_amount, nassau_segment_bet, nassau_overall_bet, greenie_amount, skins_amount, greenie_holes, nassau_format, is_team_game, payout_config, slug, selfie_hole)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO tournaments (name, date, game_type, course_id, course_name, slope_rating, bet_amount, nassau_segment_bet, nassau_overall_bet, greenie_amount, skins_amount, greenie_holes, nassau_format, is_team_game, payout_config, slug, selfie_hole, handicap_mode)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       name,
       date || new Date().toISOString().split('T')[0],
@@ -115,7 +116,8 @@ router.post('/', (req, res) => {
       is_team_game || 0,
       payout_config ? JSON.stringify(payout_config) : null,
       slug,
-      selfieHole
+      selfieHole,
+      handicap_mode || 'gross'
     )
 
     res.status(201).json({ id: result.lastInsertRowid, slug })

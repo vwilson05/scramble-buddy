@@ -68,8 +68,47 @@ export function calculateCourseHandicap(handicapIndex, slopeRating = 113) {
 }
 
 /**
+ * Build stroke allocation map for a player's handicap
+ * Fair allocation: non-par-3s first (by difficulty), then par-3s, then double up
+ * @param {number} courseHandicap - Player's course handicap
+ * @param {Array} holes - Array of hole objects with { hole_number, par, handicap_rating }
+ * @returns {Object} Map of hole_number -> strokes on that hole
+ */
+export function buildStrokeAllocationMap(courseHandicap, holes) {
+  if (courseHandicap <= 0 || !holes || holes.length === 0) return {}
+
+  // Separate holes into non-par-3s and par-3s, sorted by handicap rating (hardest first)
+  const nonPar3s = holes.filter(h => h.par !== 3).sort((a, b) => (a.handicap_rating || 99) - (b.handicap_rating || 99))
+  const par3s = holes.filter(h => h.par === 3).sort((a, b) => (a.handicap_rating || 99) - (b.handicap_rating || 99))
+
+  // Build allocation order: non-par-3s first, then par-3s
+  const allocationOrder = [...nonPar3s, ...par3s]
+
+  // Initialize stroke map
+  const strokeMap = {}
+  holes.forEach(h => { strokeMap[h.hole_number] = 0 })
+
+  let remainingStrokes = courseHandicap
+  let passNumber = 0
+
+  // Keep allocating until all strokes are distributed
+  while (remainingStrokes > 0) {
+    for (const hole of allocationOrder) {
+      if (remainingStrokes <= 0) break
+      strokeMap[hole.hole_number]++
+      remainingStrokes--
+    }
+    passNumber++
+    // Safety: prevent infinite loop (max 5 strokes per hole)
+    if (passNumber > 5) break
+  }
+
+  return strokeMap
+}
+
+/**
  * Calculate strokes received on a specific hole based on course handicap
- * and hole handicap rating
+ * and hole handicap rating (legacy version for backward compatibility)
  */
 export function getStrokesOnHole(courseHandicap, holeHandicapRating) {
   if (courseHandicap <= 0) return 0
@@ -90,6 +129,35 @@ export function getStrokesOnHole(courseHandicap, holeHandicapRating) {
 export function calculateNetScore(grossScore, courseHandicap, holeHandicapRating) {
   const strokes = getStrokesOnHole(courseHandicap, holeHandicapRating)
   return grossScore - strokes
+}
+
+/**
+ * Calculate display handicaps for a group of players
+ * In net mode: lowest handicap becomes 0, others are relative
+ * In gross mode: full course handicaps used
+ * @param {Array} players - Array of players with courseHandicap property
+ * @param {string} mode - 'gross' or 'net'
+ * @returns {Object} Map of playerId -> displayHandicap
+ */
+export function calculateDisplayHandicaps(players, mode = 'gross') {
+  const result = {}
+
+  if (!players || players.length === 0) return result
+
+  if (mode === 'net') {
+    const handicapValues = players.map(p => p.courseHandicap || 0).filter(h => h >= 0)
+    const lowestHandicap = handicapValues.length > 0 ? Math.min(...handicapValues) : 0
+
+    players.forEach(p => {
+      result[p.id] = Math.max(0, (p.courseHandicap || 0) - lowestHandicap)
+    })
+  } else {
+    players.forEach(p => {
+      result[p.id] = p.courseHandicap || 0
+    })
+  }
+
+  return result
 }
 
 /**

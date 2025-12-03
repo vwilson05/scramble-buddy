@@ -24,7 +24,8 @@ const newRound = ref({
   nassau_format: '6-6-6',
   bet_amount: 0,
   greenie_amount: 0,
-  is_team_game: false
+  is_team_game: false,
+  handicap_mode: 'gross' // 'gross' or 'net'
 })
 
 let pollInterval = null
@@ -400,11 +401,11 @@ async function applyAndStartRound() {
 
 async function shareLink() {
   const url = window.location.href
-  const text = `Join ${tournament.value?.name} on Scramble Buddy!`
+  const text = `Join ${tournament.value?.name} on 18Eagles!`
 
   if (navigator.share) {
     try {
-      await navigator.share({ title: 'Scramble Buddy', text, url })
+      await navigator.share({ title: '18Eagles', text, url })
     } catch (e) { /* cancelled */ }
   } else {
     await navigator.clipboard.writeText(url)
@@ -1097,6 +1098,34 @@ function getTeeColorClass(teeName) {
                 class="w-full p-3 bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-golf-green"
               />
             </div>
+          </div>
+
+          <!-- Handicap Mode -->
+          <div>
+            <label class="block text-sm text-gray-400 mb-2">Handicap Strokes</label>
+            <div class="flex gap-2">
+              <button
+                @click="newRound.handicap_mode = 'gross'"
+                :class="[
+                  'flex-1 py-2 rounded-lg text-sm font-medium transition-colors',
+                  newRound.handicap_mode === 'gross' ? 'bg-golf-green text-white' : 'bg-gray-700 text-gray-400'
+                ]"
+              >
+                Gross (Full)
+              </button>
+              <button
+                @click="newRound.handicap_mode = 'net'"
+                :class="[
+                  'flex-1 py-2 rounded-lg text-sm font-medium transition-colors',
+                  newRound.handicap_mode === 'net' ? 'bg-golf-green text-white' : 'bg-gray-700 text-gray-400'
+                ]"
+              >
+                Net (Relative)
+              </button>
+            </div>
+            <p class="text-xs text-gray-500 mt-1">
+              {{ newRound.handicap_mode === 'gross' ? 'All players use their full handicap strokes' : 'Strokes relative to lowest handicap (lowest gets 0)' }}
+            </p>
           </div>
 
           <label class="flex items-center gap-3 cursor-pointer">

@@ -93,8 +93,8 @@ function cancelDeleteMultiDay(event) {
     <!-- Header -->
     <div class="text-center py-8 animate-slide-up">
       <h1 class="text-4xl font-bold mb-2">
-        <span class="text-golf-green">Scramble</span>
-        <span class="text-gold">Buddy</span>
+        <span class="text-golf-green">18</span>
+        <span class="text-gold">Eagles</span>
       </h1>
       <p class="text-gray-400">The best golf tournament app for you and your buddies</p>
     </div>

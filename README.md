@@ -1,4 +1,4 @@
-# Scramble Buddy
+# 18Eagles
 
 The best golf tournament app for you and your buddies!
 

@@ -293,11 +293,11 @@ function getScoreSymbolClass(holeNumber) {
 
 async function shareLink() {
   const url = window.location.href
-  const text = `Join ${store.currentTournament?.name} on Scramble Buddy!`
+  const text = `Join ${store.currentTournament?.name} on 18Eagles!`
 
   if (navigator.share) {
     try {
-      await navigator.share({ title: 'Scramble Buddy', text, url })
+      await navigator.share({ title: '18Eagles', text, url })
     } catch (e) {
       // User cancelled or error
     }

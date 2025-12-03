@@ -42,6 +42,7 @@ const nassauAutoDouble = ref(true)
 const greenieAmount = ref(1)
 const skinsAmount = ref(1)
 const selectedGreenieHoles = ref([])
+const handicapMode = ref('gross') // 'gross' = full strokes, 'net' = relative to lowest
 const useCustomPayouts = ref(false)
 const entryFee = ref(75)
 const teamPayouts = ref([
@@ -470,7 +471,8 @@ async function startTournament() {
       greenie_holes: selectedGreenieHoles.value.join(','),
       nassau_format: isNassauStyle ? nassauFormat.value : null,
       is_team_game: isTeamGame.value ? 1 : 0,
-      payout_config: payoutConfig
+      payout_config: payoutConfig,
+      handicap_mode: handicapMode.value
     })
 
     for (const player of validPlayers.value) {
@@ -1011,6 +1013,50 @@ function getTeamColorClass(teamNum, type = 'bg') {
     <div v-if="step === 5" class="animate-slide-up">
       <h2 class="text-2xl font-bold mb-2">Set Up Bets</h2>
       <p class="text-gray-400 mb-6">Optional: Add some stakes!</p>
+
+      <!-- Handicap Mode Toggle -->
+      <div class="card mb-4">
+        <div class="flex items-center justify-between">
+          <div>
+            <div class="font-semibold">Handicap Strokes</div>
+            <div class="text-sm text-gray-400">
+              {{ handicapMode === 'gross' ? 'Full strokes (all players get their full handicap)' : 'Net strokes (relative to lowest handicap)' }}
+            </div>
+          </div>
+          <div class="flex gap-1 bg-gray-700 rounded-lg p-1">
+            <button
+              @click="handicapMode = 'gross'"
+              :class="[
+                'px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+                handicapMode === 'gross' ? 'bg-golf-green text-white' : 'text-gray-400 hover:text-white'
+              ]"
+            >
+              Gross
+            </button>
+            <button
+              @click="handicapMode = 'net'"
+              :class="[
+                'px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+                handicapMode === 'net' ? 'bg-golf-green text-white' : 'text-gray-400 hover:text-white'
+              ]"
+            >
+              Net
+            </button>
+          </div>
+        </div>
+        <div v-if="handicapMode === 'net' && validPlayers.length >= 2" class="mt-3 p-2 bg-gray-700/50 rounded-lg text-xs">
+          <div class="text-gray-400 mb-1">Example with your players:</div>
+          <div class="space-y-0.5">
+            <div v-for="(player, idx) in validPlayers.slice(0, 4)" :key="idx" class="flex justify-between">
+              <span>{{ player.name || `Player ${idx + 1}` }}</span>
+              <span>
+                <span class="text-gray-500">{{ player.handicap }} HCP → </span>
+                <span class="text-golf-green font-medium">{{ Math.max(0, player.handicap - Math.min(...validPlayers.map(p => p.handicap))) }} strokes</span>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <!-- Payout Type Toggle -->
       <div class="card mb-4">
