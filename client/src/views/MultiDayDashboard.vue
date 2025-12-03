@@ -359,6 +359,19 @@ function createNewRound() {
   })
 }
 
+function setupRound(round) {
+  // Navigate to Setup.vue with the existing round ID for full configuration
+  router.push({
+    path: '/setup',
+    query: {
+      multiDayId: multiDayId.value,
+      roundId: round.id,
+      roundNumber: round.round_number,
+      dayNumber: round.day_number
+    }
+  })
+}
+
 function openTeamRandomizer(round) {
   selectedRoundForTeams.value = round
   randomizeTeams()
@@ -601,19 +614,10 @@ function getTeeColorClass(teeName) {
               <!-- Buttons for scheduled rounds -->
               <div v-if="round.status === 'scheduled'" class="flex gap-2">
                 <button
-                  @click.stop="openTeamRandomizer(round)"
-                  class="px-3 py-2 bg-purple-600 rounded-lg font-semibold text-sm hover:bg-purple-700 transition-colors"
-                  title="Randomize Teams"
-                >
-                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                </button>
-                <button
-                  @click.stop="startRound(round)"
+                  @click.stop="setupRound(round)"
                   class="px-4 py-2 bg-golf-green rounded-lg font-semibold text-sm hover:bg-green-600 transition-colors"
                 >
-                  Start Round
+                  Set Up Round
                 </button>
               </div>
 

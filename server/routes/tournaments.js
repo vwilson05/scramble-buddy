@@ -223,6 +223,56 @@ router.put('/:id/players/:playerId/team', (req, res) => {
   }
 })
 
+// Update player (general - team, tee, handicap)
+router.put('/:id/players/:playerId', (req, res) => {
+  try {
+    const tournament = findTournament(req.params.id)
+    if (!tournament) {
+      return res.status(404).json({ error: 'Tournament not found' })
+    }
+
+    const { playerId } = req.params
+    const { team, tee_color, handicap } = req.body
+
+    // Find the player by multi_day_player_id first, then by direct id
+    let player = db.prepare('SELECT * FROM players WHERE tournament_id = ? AND multi_day_player_id = ?').get(tournament.id, playerId)
+    if (!player) {
+      player = db.prepare('SELECT * FROM players WHERE tournament_id = ? AND id = ?').get(tournament.id, playerId)
+    }
+
+    if (!player) {
+      return res.status(404).json({ error: 'Player not found' })
+    }
+
+    // Build update query dynamically
+    const updates = []
+    const values = []
+
+    if (team !== undefined) {
+      updates.push('team = ?')
+      values.push(team)
+    }
+    if (tee_color !== undefined) {
+      updates.push('tee_color = ?')
+      values.push(tee_color)
+    }
+    if (handicap !== undefined) {
+      updates.push('handicap = ?')
+      values.push(handicap)
+    }
+
+    if (updates.length > 0) {
+      values.push(player.id)
+      db.prepare(`UPDATE players SET ${updates.join(', ')} WHERE id = ?`).run(...values)
+    }
+
+    const updatedPlayer = db.prepare('SELECT * FROM players WHERE id = ?').get(player.id)
+    res.json(updatedPlayer)
+  } catch (error) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
 // Get leaderboard
 router.get('/:id/leaderboard', (req, res) => {
   try {

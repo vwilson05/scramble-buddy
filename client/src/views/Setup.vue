@@ -20,6 +20,7 @@ const multiDayId = ref(null)
 const multiDayTournament = ref(null)
 const roundNumber = ref(1)
 const dayNumber = ref(1)
+const existingRoundId = ref(null)  // For editing existing scheduled rounds
 
 // Wizard step
 const step = ref(1)
@@ -244,6 +245,8 @@ watch(nassauAutoDouble, (enabled) => {
 // Multi-day mode initialization
 onMounted(async () => {
   const queryMultiDayId = route.query.multiDayId
+  const queryRoundId = route.query.roundId
+
   if (queryMultiDayId) {
     isMultiDayMode.value = true
     multiDayId.value = queryMultiDayId
@@ -266,6 +269,35 @@ onMounted(async () => {
           team: Math.floor(idx / 2) + 1,
           tee: 'white'
         }))
+      }
+    }
+
+    // If editing an existing scheduled round, load its data
+    if (queryRoundId) {
+      existingRoundId.value = queryRoundId
+      try {
+        const response = await fetch(`/api/tournaments/${queryRoundId}`)
+        const roundData = await response.json()
+        if (roundData) {
+          tournamentName.value = roundData.name || tournamentName.value
+          gameType.value = roundData.game_type || 'stroke_play'
+          nassauFormat.value = roundData.nassau_format || '6-6-6'
+          playAsTeams.value = roundData.is_team_game === 1
+
+          // Load players from the round if they exist
+          if (roundData.players && roundData.players.length > 0) {
+            players.value = roundData.players.map((p, idx) => ({
+              id: p.id,
+              multiDayPlayerId: p.multi_day_player_id,
+              name: p.name,
+              handicap: p.handicap || 0,
+              team: p.team || Math.floor(idx / 2) + 1,
+              tee: p.tee_color || 'white'
+            }))
+          }
+        }
+      } catch (err) {
+        console.error('Error loading existing round:', err)
       }
     }
   }
@@ -497,7 +529,7 @@ async function startTournament() {
 
     const isNassauStyle = gameType.value === 'nassau' || gameType.value === 'high_low'
 
-    // Multi-day mode: create round via multiday API
+    // Multi-day mode: create or update round
     if (isMultiDayMode.value) {
       const roundData = {
         name: tournamentName.value,
@@ -517,21 +549,54 @@ async function startTournament() {
         is_team_game: isTeamGame.value ? 1 : 0,
         payout_config: payoutConfig,
         handicap_mode: handicapMode.value,
-        // Include player data with teams and tees
-        players: validPlayers.value.map(p => ({
+        status: 'active'  // Start immediately
+      }
+
+      let tournamentId
+      let slug
+
+      // If editing existing round, update it; otherwise create new
+      if (existingRoundId.value) {
+        // Update existing round
+        const response = await fetch(`/api/tournaments/${existingRoundId.value}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(roundData)
+        })
+        const updated = await response.json()
+        tournamentId = existingRoundId.value
+        slug = updated.slug || existingRoundId.value
+
+        // Update players with teams and tees
+        for (const player of validPlayers.value) {
+          await fetch(`/api/tournaments/${tournamentId}/players/${player.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              team: isTeamGame.value ? player.team : null,
+              tee_color: player.tee || 'white',
+              handicap: player.handicap
+            })
+          })
+        }
+      } else {
+        // Create new round
+        roundData.players = validPlayers.value.map(p => ({
           multiDayPlayerId: p.multiDayPlayerId || p.id,
           name: p.name,
           handicap: p.handicap,
           team: isTeamGame.value ? p.team : null,
           tee_color: p.tee || 'white'
         }))
-      }
 
-      const round = await multiDayStore.createRound(multiDayId.value, roundData)
+        const round = await multiDayStore.createRound(multiDayId.value, roundData)
+        tournamentId = round.id
+        slug = round.slug || round.id
+      }
 
       // Save Calcutta config if enabled
       if (enableCalcutta.value) {
-        await calcuttaStore.saveConfig(round.id, {
+        await calcuttaStore.saveConfig(tournamentId, {
           enabled: true,
           payout_structure: calcuttaPayouts.value
             .filter(p => p.percent > 0)
@@ -539,14 +604,7 @@ async function startTournament() {
         })
       }
 
-      // Start the round and navigate to scorecard
-      await fetch(`/api/tournaments/${round.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'active' })
-      })
-
-      router.push(`/tournament/${round.slug || round.id}/scorecard`)
+      router.push(`/tournament/${slug}/scorecard`)
       return
     }
 
