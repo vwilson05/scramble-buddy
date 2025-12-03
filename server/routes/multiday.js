@@ -192,6 +192,13 @@ router.put('/:id', (req, res) => {
     const { id } = req.params
     const { name, start_date, end_date, num_days, num_rounds, point_system, payout_structure, status, handicap_mode } = req.body
 
+    // Find tournament by ID or slug
+    let tournament = db.prepare('SELECT * FROM multi_day_tournaments WHERE id = ? OR slug = ?').get(id, id)
+    if (!tournament) {
+      return res.status(404).json({ error: 'Tournament not found' })
+    }
+    const tournamentId = tournament.id
+
     // Check if handicap_mode column exists
     const tableInfo = db.prepare("PRAGMA table_info(multi_day_tournaments)").all()
     const hasHandicapMode = tableInfo.some(col => col.name === 'handicap_mode')
@@ -219,7 +226,7 @@ router.put('/:id', (req, res) => {
         payout_structure ? JSON.stringify(payout_structure) : null,
         status,
         handicap_mode,
-        id
+        tournamentId
       )
     } else {
       // Fallback without handicap_mode
@@ -243,11 +250,12 @@ router.put('/:id', (req, res) => {
         point_system ? JSON.stringify(point_system) : null,
         payout_structure ? JSON.stringify(payout_structure) : null,
         status,
-        id
+        tournamentId
       )
     }
 
-    const tournament = db.prepare('SELECT * FROM multi_day_tournaments WHERE id = ?').get(id)
+    // Fetch updated tournament
+    tournament = db.prepare('SELECT * FROM multi_day_tournaments WHERE id = ?').get(tournamentId)
     res.json({
       ...tournament,
       point_system: JSON.parse(tournament.point_system || '[]'),
