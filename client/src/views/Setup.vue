@@ -1,15 +1,25 @@
 <script setup>
-import { ref, computed, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, watch, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { useTournamentStore } from '../stores/tournament'
 import { useCourseStore } from '../stores/course'
 import { useCalcuttaStore } from '../stores/calcutta'
+import { useMultiDayStore } from '../stores/multiday'
 import { GAME_TYPE_INFO } from '../utils/scoring'
 
 const router = useRouter()
+const route = useRoute()
 const tournamentStore = useTournamentStore()
 const courseStore = useCourseStore()
 const calcuttaStore = useCalcuttaStore()
+const multiDayStore = useMultiDayStore()
+
+// Multi-day mode detection
+const isMultiDayMode = ref(false)
+const multiDayId = ref(null)
+const multiDayTournament = ref(null)
+const roundNumber = ref(1)
+const dayNumber = ref(1)
 
 // Wizard step
 const step = ref(1)
@@ -228,6 +238,36 @@ watch(nassauSegmentBet, (newVal) => {
 watch(nassauAutoDouble, (enabled) => {
   if (enabled) {
     nassauOverallBet.value = nassauSegmentBet.value * 2
+  }
+})
+
+// Multi-day mode initialization
+onMounted(async () => {
+  const queryMultiDayId = route.query.multiDayId
+  if (queryMultiDayId) {
+    isMultiDayMode.value = true
+    multiDayId.value = queryMultiDayId
+    roundNumber.value = parseInt(route.query.roundNumber) || 1
+    dayNumber.value = parseInt(route.query.dayNumber) || 1
+
+    // Fetch multi-day tournament data
+    const data = await multiDayStore.fetchMultiDay(queryMultiDayId)
+    if (data) {
+      multiDayTournament.value = data
+      tournamentName.value = `${data.name} - Round ${roundNumber.value}`
+
+      // Pre-populate players from multi-day tournament
+      if (data.players && data.players.length > 0) {
+        players.value = data.players.map((p, idx) => ({
+          id: p.id,
+          multiDayPlayerId: p.id,
+          name: p.name,
+          handicap: p.handicap || 0,
+          team: Math.floor(idx / 2) + 1,
+          tee: 'white'
+        }))
+      }
+    }
   }
 })
 
@@ -457,6 +497,60 @@ async function startTournament() {
 
     const isNassauStyle = gameType.value === 'nassau' || gameType.value === 'high_low'
 
+    // Multi-day mode: create round via multiday API
+    if (isMultiDayMode.value) {
+      const roundData = {
+        name: tournamentName.value,
+        day_number: dayNumber.value,
+        round_number: roundNumber.value,
+        game_type: gameType.value,
+        course_id: selectedCourse.value?.id,
+        course_name: selectedCourse.value?.name,
+        slope_rating: courseStore.selectedCourse?.slope_rating || 113,
+        bet_amount: useCustomPayouts.value ? 0 : (isNassauStyle ? nassauSegmentBet.value : betAmount.value),
+        nassau_segment_bet: isNassauStyle ? nassauSegmentBet.value : null,
+        nassau_overall_bet: isNassauStyle ? nassauOverallBet.value : null,
+        greenie_amount: useCustomPayouts.value ? 0 : greenieAmount.value,
+        skins_amount: gameType.value === 'skins' ? skinsAmount.value : 0,
+        greenie_holes: selectedGreenieHoles.value.join(','),
+        nassau_format: isNassauStyle ? nassauFormat.value : null,
+        is_team_game: isTeamGame.value ? 1 : 0,
+        payout_config: payoutConfig,
+        handicap_mode: handicapMode.value,
+        // Include player data with teams and tees
+        players: validPlayers.value.map(p => ({
+          multiDayPlayerId: p.multiDayPlayerId || p.id,
+          name: p.name,
+          handicap: p.handicap,
+          team: isTeamGame.value ? p.team : null,
+          tee_color: p.tee || 'white'
+        }))
+      }
+
+      const round = await multiDayStore.createRound(multiDayId.value, roundData)
+
+      // Save Calcutta config if enabled
+      if (enableCalcutta.value) {
+        await calcuttaStore.saveConfig(round.id, {
+          enabled: true,
+          payout_structure: calcuttaPayouts.value
+            .filter(p => p.percent > 0)
+            .map(p => ({ place: p.place, type: 'percent', value: p.percent }))
+        })
+      }
+
+      // Start the round and navigate to scorecard
+      await fetch(`/api/tournaments/${round.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'active' })
+      })
+
+      router.push(`/tournament/${round.slug || round.id}/scorecard`)
+      return
+    }
+
+    // Regular single-round mode
     const { id: tournamentId, slug } = await tournamentStore.createTournament({
       name: tournamentName.value,
       game_type: gameType.value,
@@ -518,12 +612,15 @@ function getTeamColorClass(teamNum, type = 'bg') {
   <div class="min-h-screen p-4 pb-24">
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
-      <button @click="router.push('/')" class="text-gray-400 hover:text-white">
+      <button @click="isMultiDayMode ? router.push(`/multiday/${multiDayId}`) : router.push('/')" class="text-gray-400 hover:text-white">
         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
         </svg>
       </button>
-      <h1 class="text-xl font-bold">New Round</h1>
+      <div class="text-center">
+        <h1 class="text-xl font-bold">{{ isMultiDayMode ? 'New Round' : 'New Round' }}</h1>
+        <div v-if="isMultiDayMode" class="text-xs text-gold">{{ multiDayTournament?.name }} - Round {{ roundNumber }}</div>
+      </div>
       <div class="text-sm text-gray-400">{{ step }}/{{ totalSteps }}</div>
     </div>
 
@@ -791,8 +888,19 @@ function getTeamColorClass(teamNum, type = 'bg') {
 
     <!-- Step 3: Players -->
     <div v-if="step === 3" class="animate-slide-up">
-      <h2 class="text-2xl font-bold mb-2">Who's playing?</h2>
-      <p class="text-gray-400 mb-6">Add players with their handicaps and tees</p>
+      <h2 class="text-2xl font-bold mb-2">{{ isMultiDayMode ? 'Confirm Players' : "Who's playing?" }}</h2>
+      <p class="text-gray-400 mb-6">{{ isMultiDayMode ? 'Update handicaps and select tees for this round' : 'Add players with their handicaps and tees' }}</p>
+
+      <!-- Multi-day mode notice -->
+      <div v-if="isMultiDayMode" class="mb-4 p-3 bg-gold/10 border border-gold/30 rounded-xl">
+        <div class="flex items-center gap-2">
+          <svg class="w-5 h-5 text-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span class="text-sm text-gold">Players from {{ multiDayTournament?.name }}</span>
+        </div>
+        <p class="text-xs text-gray-400 mt-1">You can update handicaps and tee selections for this round.</p>
+      </div>
 
       <!-- Group Tee Recommendation for Scrambles -->
       <div v-if="requiresTeams && groupTeeRecommendation && validPlayers.length >= 2" class="mb-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-xl">
@@ -818,10 +926,16 @@ function getTeamColorClass(teamNum, type = 'bg') {
               v-model="player.name"
               type="text"
               :placeholder="`Player ${index + 1} name`"
-              class="flex-1 p-3 bg-gray-700 border border-gray-600 rounded-xl focus:border-golf-green focus:outline-none"
+              :readonly="isMultiDayMode"
+              :class="[
+                'flex-1 p-3 border rounded-xl focus:outline-none',
+                isMultiDayMode
+                  ? 'bg-gray-800 border-gray-700 text-gray-300 cursor-not-allowed'
+                  : 'bg-gray-700 border-gray-600 focus:border-golf-green'
+              ]"
             />
             <button
-              v-if="players.length > 2"
+              v-if="players.length > 2 && !isMultiDayMode"
               @click="removePlayer(index)"
               class="p-2 text-red-400 hover:text-red-300 shrink-0"
             >
@@ -892,6 +1006,7 @@ function getTeamColorClass(teamNum, type = 'bg') {
       </div>
 
       <button
+        v-if="!isMultiDayMode"
         @click="addPlayer"
         class="w-full p-3 border-2 border-dashed border-gray-600 rounded-xl text-gray-400 hover:border-golf-green hover:text-golf-green transition-colors"
       >
@@ -899,7 +1014,7 @@ function getTeamColorClass(teamNum, type = 'bg') {
       </button>
 
       <div class="mt-4 text-sm text-gray-400 text-center">
-        {{ validPlayers.length }} player{{ validPlayers.length !== 1 ? 's' : '' }} added
+        {{ validPlayers.length }} player{{ validPlayers.length !== 1 ? 's' : '' }} {{ isMultiDayMode ? 'in tournament' : 'added' }}
       </div>
     </div>
 

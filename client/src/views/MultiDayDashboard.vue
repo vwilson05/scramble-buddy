@@ -346,6 +346,19 @@ async function startRound(round) {
   }
 }
 
+function createNewRound() {
+  // Navigate to full Setup.vue with multiDayId param
+  const nextRound = rounds.value.length + 1
+  router.push({
+    path: '/setup',
+    query: {
+      multiDayId: multiDayId.value,
+      roundNumber: nextRound,
+      dayNumber: Math.ceil(nextRound / (tournament.value.num_rounds / tournament.value.num_days))
+    }
+  })
+}
+
 function openTeamRandomizer(round) {
   selectedRoundForTeams.value = round
   randomizeTeams()
@@ -556,7 +569,7 @@ function getTeeColorClass(teeName) {
           <h2 class="text-xl font-bold">Rounds</h2>
           <button
             v-if="rounds.length < tournament?.num_rounds"
-            @click="showNewRound = true"
+            @click="createNewRound"
             class="px-4 py-2 bg-golf-green rounded-lg font-semibold text-sm"
           >
             + New Round
@@ -631,7 +644,7 @@ function getTeeColorClass(teeName) {
         <div v-if="rounds.length === 0" class="text-center py-8">
           <p class="text-gray-500 mb-4">No rounds created yet</p>
           <button
-            @click="showNewRound = true"
+            @click="createNewRound"
             class="px-6 py-3 bg-golf-green rounded-xl font-semibold"
           >
             Create First Round

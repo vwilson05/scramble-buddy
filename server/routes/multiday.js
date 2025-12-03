@@ -292,13 +292,18 @@ router.post('/:id/rounds', (req, res) => {
       game_type,
       course_id,
       course_name,
+      slope_rating,
       nassau_format,
+      nassau_segment_bet,
+      nassau_overall_bet,
       bet_amount,
       greenie_amount,
       skins_amount,
       greenie_holes,
       is_team_game,
-      handicap_mode
+      handicap_mode,
+      payout_config,
+      players: playerData  // Player array with team and tee assignments
     } = req.body
 
     // Get multi-day tournament
@@ -316,40 +321,64 @@ router.post('/:id/rounds', (req, res) => {
       INSERT INTO tournaments (
         name, date, game_type, status, course_id, course_name, slope_rating,
         bet_amount, greenie_amount, skins_amount, greenie_holes, nassau_format,
-        is_team_game, multi_day_id, day_number, round_number, slug, selfie_hole, handicap_mode
-      ) VALUES (?, ?, ?, 'setup', ?, ?, 113, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        nassau_segment_bet, nassau_overall_bet, is_team_game, multi_day_id,
+        day_number, round_number, slug, selfie_hole, handicap_mode, payout_config
+      ) VALUES (?, ?, ?, 'setup', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       name || `${multiDay.name} - Round ${round_number}`,
       date || multiDay.start_date,
       game_type || 'scramble',
       course_id || null,
       course_name || null,
+      slope_rating || 113,
       bet_amount || 0,
       greenie_amount || 0,
       skins_amount || 0,
       greenie_holes || null,
       nassau_format || '6-6-6',
+      nassau_segment_bet || null,
+      nassau_overall_bet || null,
       is_team_game ? 1 : 0,
       id,
       day_number || 1,
       round_number || 1,
       slug,
       selfieHole,
-      handicap_mode || 'gross'
+      handicap_mode || 'gross',
+      payout_config ? JSON.stringify(payout_config) : null
     )
 
     const tournamentId = result.lastInsertRowid
 
-    // Copy players from multi-day to this round
-    const multiDayPlayers = db.prepare('SELECT * FROM multi_day_players WHERE multi_day_id = ?').all(id)
+    // If player data provided from Setup.vue, use it (includes team/tee assignments)
+    if (playerData && playerData.length > 0) {
+      const insertPlayer = db.prepare(`
+        INSERT INTO players (tournament_id, name, handicap, team, tee_color, multi_day_player_id)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `)
 
-    const insertPlayer = db.prepare(`
-      INSERT INTO players (tournament_id, name, handicap, team, multi_day_player_id)
-      VALUES (?, ?, ?, ?, ?)
-    `)
+      for (const player of playerData) {
+        insertPlayer.run(
+          tournamentId,
+          player.name,
+          player.handicap || 0,
+          player.team || null,
+          player.tee_color || 'white',
+          player.multiDayPlayerId || null
+        )
+      }
+    } else {
+      // Fall back to copying players from multi-day tournament
+      const multiDayPlayers = db.prepare('SELECT * FROM multi_day_players WHERE multi_day_id = ?').all(id)
 
-    for (const player of multiDayPlayers) {
-      insertPlayer.run(tournamentId, player.name, player.handicap, player.team, player.id)
+      const insertPlayer = db.prepare(`
+        INSERT INTO players (tournament_id, name, handicap, team, multi_day_player_id)
+        VALUES (?, ?, ?, ?, ?)
+      `)
+
+      for (const player of multiDayPlayers) {
+        insertPlayer.run(tournamentId, player.name, player.handicap, player.team, player.id)
+      }
     }
 
     const tournament = db.prepare('SELECT * FROM tournaments WHERE id = ?').get(tournamentId)
