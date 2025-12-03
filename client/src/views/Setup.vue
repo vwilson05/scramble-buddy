@@ -259,6 +259,9 @@ onMounted(async () => {
       multiDayTournament.value = data
       tournamentName.value = `${data.name} - Round ${roundNumber.value}`
 
+      // Use tournament's default handicap mode
+      handicapMode.value = data.handicap_mode || 'gross'
+
       // Pre-populate players from multi-day tournament
       if (data.players && data.players.length > 0) {
         players.value = data.players.map((p, idx) => ({

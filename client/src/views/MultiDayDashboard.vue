@@ -107,7 +107,8 @@ const editForm = ref({
   name: '',
   num_days: 1,
   num_rounds: 1,
-  point_system: []
+  point_system: [],
+  handicap_mode: 'gross'
 })
 
 // New player form for editing
@@ -127,7 +128,8 @@ function openEditTournament() {
       name: tournament.value.name,
       num_days: tournament.value.num_days,
       num_rounds: tournament.value.num_rounds,
-      point_system: pointSystem
+      point_system: pointSystem,
+      handicap_mode: tournament.value.handicap_mode || 'gross'
     }
   }
   showEditTournament.value = true
@@ -139,7 +141,8 @@ async function saveEditTournament() {
       name: editForm.value.name,
       num_days: editForm.value.num_days,
       num_rounds: editForm.value.num_rounds,
-      point_system: editForm.value.point_system
+      point_system: editForm.value.point_system,
+      handicap_mode: editForm.value.handicap_mode
     })
     await store.fetchMultiDay(multiDayId.value)
     showEditTournament.value = false
@@ -1174,8 +1177,8 @@ function getTeeColorClass(teeName) {
     </div>
 
     <!-- Edit Tournament Modal -->
-    <div v-if="showEditTournament" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-      <div class="card max-w-md w-full max-h-[90vh] overflow-y-auto">
+    <div v-if="showEditTournament" class="fixed inset-0 bg-black/70 flex items-start justify-center z-50 p-4 overflow-y-auto">
+      <div class="card max-w-md w-full my-4" style="touch-action: pan-y;">
         <div class="flex items-center justify-between mb-4">
           <h3 class="text-xl font-bold">Edit Tournament</h3>
           <button @click="showEditTournament = false" class="text-gray-400">
@@ -1292,6 +1295,34 @@ function getTeeColorClass(teeName) {
                 <span class="text-sm text-gray-500">pts</span>
               </div>
             </div>
+          </div>
+
+          <!-- Handicap Mode -->
+          <div>
+            <label class="block text-sm text-gray-400 mb-2">Default Handicap Mode</label>
+            <div class="flex gap-2">
+              <button
+                @click="editForm.handicap_mode = 'gross'"
+                :class="[
+                  'flex-1 py-3 rounded-lg font-semibold transition-colors',
+                  editForm.handicap_mode === 'gross' ? 'bg-golf-green text-white' : 'bg-gray-700 text-gray-400'
+                ]"
+              >
+                Gross (Full)
+              </button>
+              <button
+                @click="editForm.handicap_mode = 'net'"
+                :class="[
+                  'flex-1 py-3 rounded-lg font-semibold transition-colors',
+                  editForm.handicap_mode === 'net' ? 'bg-golf-green text-white' : 'bg-gray-700 text-gray-400'
+                ]"
+              >
+                Net (Relative)
+              </button>
+            </div>
+            <p class="text-xs text-gray-500 mt-2">
+              {{ editForm.handicap_mode === 'gross' ? 'All players use their full handicap strokes' : 'Strokes relative to lowest handicap (lowest gets 0)' }}
+            </p>
           </div>
         </div>
 

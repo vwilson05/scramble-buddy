@@ -190,7 +190,7 @@ router.post('/', (req, res) => {
 router.put('/:id', (req, res) => {
   try {
     const { id } = req.params
-    const { name, start_date, end_date, num_days, num_rounds, point_system, payout_structure, status } = req.body
+    const { name, start_date, end_date, num_days, num_rounds, point_system, payout_structure, status, handicap_mode } = req.body
 
     db.prepare(`
       UPDATE multi_day_tournaments
@@ -201,7 +201,8 @@ router.put('/:id', (req, res) => {
           num_rounds = COALESCE(?, num_rounds),
           point_system = COALESCE(?, point_system),
           payout_structure = COALESCE(?, payout_structure),
-          status = COALESCE(?, status)
+          status = COALESCE(?, status),
+          handicap_mode = COALESCE(?, handicap_mode)
       WHERE id = ?
     `).run(
       name,
@@ -212,6 +213,7 @@ router.put('/:id', (req, res) => {
       point_system ? JSON.stringify(point_system) : null,
       payout_structure ? JSON.stringify(payout_structure) : null,
       status,
+      handicap_mode,
       id
     )
 
