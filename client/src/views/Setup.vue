@@ -283,6 +283,13 @@ onMounted(async () => {
           gameType.value = roundData.game_type || 'stroke_play'
           nassauFormat.value = roundData.nassau_format || '6-6-6'
           playAsTeams.value = roundData.is_team_game === 1
+          handicapMode.value = roundData.handicap_mode || 'gross'
+
+          // Load betting info if available
+          if (roundData.bet_amount) betAmount.value = roundData.bet_amount
+          if (roundData.greenie_amount) greenieAmount.value = roundData.greenie_amount
+          if (roundData.nassau_segment_bet) nassauSegmentBet.value = roundData.nassau_segment_bet
+          if (roundData.nassau_overall_bet) nassauOverallBet.value = roundData.nassau_overall_bet
 
           // Load players from the round if they exist
           if (roundData.players && roundData.players.length > 0) {
