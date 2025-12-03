@@ -253,7 +253,10 @@ export function initializeDatabase(db) {
   // Add handicap_mode to multi_day_tournaments (default for new rounds)
   try {
     db.exec(`ALTER TABLE multi_day_tournaments ADD COLUMN handicap_mode TEXT DEFAULT 'gross'`)
-  } catch (e) { /* column already exists */ }
+    console.log('Added handicap_mode column to multi_day_tournaments')
+  } catch (e) {
+    console.log('handicap_mode column already exists in multi_day_tournaments (or error):', e.message)
+  }
 
   // Add multi_day_id to tournaments (links a round to its parent multi-day)
   try {

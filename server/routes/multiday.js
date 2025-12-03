@@ -192,30 +192,60 @@ router.put('/:id', (req, res) => {
     const { id } = req.params
     const { name, start_date, end_date, num_days, num_rounds, point_system, payout_structure, status, handicap_mode } = req.body
 
-    db.prepare(`
-      UPDATE multi_day_tournaments
-      SET name = COALESCE(?, name),
-          start_date = COALESCE(?, start_date),
-          end_date = COALESCE(?, end_date),
-          num_days = COALESCE(?, num_days),
-          num_rounds = COALESCE(?, num_rounds),
-          point_system = COALESCE(?, point_system),
-          payout_structure = COALESCE(?, payout_structure),
-          status = COALESCE(?, status),
-          handicap_mode = COALESCE(?, handicap_mode)
-      WHERE id = ?
-    `).run(
-      name,
-      start_date,
-      end_date,
-      num_days,
-      num_rounds,
-      point_system ? JSON.stringify(point_system) : null,
-      payout_structure ? JSON.stringify(payout_structure) : null,
-      status,
-      handicap_mode,
-      id
-    )
+    // Check if handicap_mode column exists
+    const tableInfo = db.prepare("PRAGMA table_info(multi_day_tournaments)").all()
+    const hasHandicapMode = tableInfo.some(col => col.name === 'handicap_mode')
+
+    if (hasHandicapMode) {
+      db.prepare(`
+        UPDATE multi_day_tournaments
+        SET name = COALESCE(?, name),
+            start_date = COALESCE(?, start_date),
+            end_date = COALESCE(?, end_date),
+            num_days = COALESCE(?, num_days),
+            num_rounds = COALESCE(?, num_rounds),
+            point_system = COALESCE(?, point_system),
+            payout_structure = COALESCE(?, payout_structure),
+            status = COALESCE(?, status),
+            handicap_mode = COALESCE(?, handicap_mode)
+        WHERE id = ?
+      `).run(
+        name,
+        start_date,
+        end_date,
+        num_days,
+        num_rounds,
+        point_system ? JSON.stringify(point_system) : null,
+        payout_structure ? JSON.stringify(payout_structure) : null,
+        status,
+        handicap_mode,
+        id
+      )
+    } else {
+      // Fallback without handicap_mode
+      db.prepare(`
+        UPDATE multi_day_tournaments
+        SET name = COALESCE(?, name),
+            start_date = COALESCE(?, start_date),
+            end_date = COALESCE(?, end_date),
+            num_days = COALESCE(?, num_days),
+            num_rounds = COALESCE(?, num_rounds),
+            point_system = COALESCE(?, point_system),
+            payout_structure = COALESCE(?, payout_structure),
+            status = COALESCE(?, status)
+        WHERE id = ?
+      `).run(
+        name,
+        start_date,
+        end_date,
+        num_days,
+        num_rounds,
+        point_system ? JSON.stringify(point_system) : null,
+        payout_structure ? JSON.stringify(payout_structure) : null,
+        status,
+        id
+      )
+    }
 
     const tournament = db.prepare('SELECT * FROM multi_day_tournaments WHERE id = ?').get(id)
     res.json({
@@ -225,7 +255,7 @@ router.put('/:id', (req, res) => {
     })
   } catch (error) {
     console.error('Error updating multi-day tournament:', error)
-    res.status(500).json({ error: 'Failed to update multi-day tournament' })
+    res.status(500).json({ error: 'Failed to update multi-day tournament', details: error.message })
   }
 })
 
