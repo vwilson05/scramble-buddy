@@ -497,9 +497,7 @@ router.delete('/:id', (req, res) => {
 // ============ HELPER FUNCTIONS ============
 
 function calculateMultiDayStandings(multiDay, players, rounds) {
-  console.log('DEBUG: Raw point_system from DB:', multiDay.point_system)
   const pointSystem = JSON.parse(multiDay.point_system || '[]')
-  console.log('DEBUG: Parsed pointSystem:', pointSystem)
 
   // Initialize standings for each player
   const standings = players.map(player => ({
@@ -536,7 +534,6 @@ function calculateMultiDayStandings(multiDay, players, rounds) {
         // Find points for this position
         const pointRule = pointSystem.find(p => p.place === result.position)
         const points = pointRule ? pointRule.points : 0
-        console.log('DEBUG: Player', multiDayPlayer.playerName, 'position', result.position, 'pointRule:', pointRule, 'points:', points)
 
         multiDayPlayer.totalPoints += points
         multiDayPlayer.totalStrokes += result.grossTotal || 0

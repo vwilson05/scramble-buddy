@@ -1303,8 +1303,20 @@ function getTeeColorClass(teeName) {
                   class="flex-1 p-2 bg-gray-700 rounded-lg text-sm text-center focus:outline-none focus:ring-2 focus:ring-golf-green"
                 />
                 <span class="text-sm text-gray-500">pts</span>
+                <button
+                  v-if="editForm.point_system.length > 1"
+                  @click="editForm.point_system.splice(index, 1); editForm.point_system.forEach((p, i) => p.place = i + 1)"
+                  class="text-red-400 hover:text-red-300 text-sm"
+                >✕</button>
+              </div>
+              <div v-if="editForm.point_system.length === 0" class="text-sm text-gray-500 italic">
+                No point system configured
               </div>
             </div>
+            <button
+              @click="editForm.point_system.push({ place: editForm.point_system.length + 1, points: 0 })"
+              class="mt-2 text-sm text-golf-green hover:text-green-400"
+            >+ Add Place</button>
           </div>
 
           <!-- Handicap Mode -->
