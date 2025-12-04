@@ -186,9 +186,11 @@ const selectedPlayerTee = computed(() => {
 })
 
 const currentHoleYardage = computed(() => {
+  const hole = currentHoleData.value
   const tee = selectedPlayer.value?.tee_color || 'white'
   const yardageKey = `yardage_${tee}`
-  return currentHoleData.value[yardageKey] || currentHoleData.value.yardage_white || null
+  // Try selected tee, then fall back through all available tees
+  return hole[yardageKey] || hole.yardage_white || hole.yardage_blue || hole.yardage_black || hole.yardage_gold || hole.yardage_red || null
 })
 
 // Methods
