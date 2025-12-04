@@ -34,6 +34,16 @@ const adjustiesShownHole13 = ref(false)
 const playerHandicapAdjustments = ref({}) // { playerId: newHandicap }
 const showRoundSettings = ref(false)
 const editHandicapMode = ref('gross')
+const showFinishConfirm = ref(false)
+
+// Check if all 18 holes have been scored for all players
+const allHolesScored = computed(() => {
+  if (!store.players.length) return false
+  return store.players.every(player => {
+    const playerScores = store.scores.filter(s => s.player_id === player.id)
+    return playerScores.length === 18 && playerScores.every(s => s.strokes > 0)
+  })
+})
 
 // Polling interval for live updates
 let pollInterval = null
@@ -84,6 +94,12 @@ async function saveRoundSettings() {
   } catch (err) {
     console.error('Error saving settings:', err)
   }
+}
+
+async function finishRound() {
+  await store.finishTournament(tournamentId.value)
+  showFinishConfirm.value = false
+  router.push(`/tournament/${tournamentId.value}/results`)
 }
 
 // Computed
@@ -582,6 +598,17 @@ async function shareLink() {
           {{ score }}
         </button>
       </div>
+
+      <!-- Finish Round Button (shows on hole 18) -->
+      <div v-if="currentHole === 18" class="mt-6 max-w-sm mx-auto">
+        <button
+          @click="showFinishConfirm = true"
+          class="w-full py-4 bg-gold text-black rounded-xl font-bold text-lg flex items-center justify-center gap-2"
+        >
+          <span>🏁</span>
+          Finish Round
+        </button>
+      </div>
     </div>
 
     <!-- Score Animation -->
@@ -717,6 +744,25 @@ async function shareLink() {
         :current-hole="currentHole"
         @close="showBetTracker = false"
       />
+    </div>
+
+    <!-- Finish Round Confirmation Modal -->
+    <div v-if="showFinishConfirm" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <div class="card max-w-sm w-full animate-slide-up text-center">
+        <div class="text-5xl mb-4">🏌️‍♂️🎉</div>
+        <h3 class="text-2xl font-bold mb-2">Finish Round?</h3>
+        <p class="text-gray-400 mb-6">
+          This will mark the round as complete and show final results.
+        </p>
+        <div class="flex gap-3">
+          <button @click="showFinishConfirm = false" class="flex-1 btn-secondary">
+            Keep Playing
+          </button>
+          <button @click="finishRound" class="flex-1 btn-gold">
+            Finish Round
+          </button>
+        </div>
+      </div>
     </div>
 
     <!-- Selfie Reminder Modal -->
