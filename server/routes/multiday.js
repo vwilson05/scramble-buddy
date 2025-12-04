@@ -518,15 +518,26 @@ function calculateMultiDayStandings(multiDay, players, rounds) {
     const roundPlayers = db.prepare('SELECT * FROM players WHERE tournament_id = ?').all(round.id)
     const scores = db.prepare('SELECT * FROM scores WHERE tournament_id = ?').all(round.id)
 
+    console.log(`Processing round ${round.id} (${round.name}), status: ${round.status}`)
+    console.log(`Round players:`, roundPlayers.map(p => ({ id: p.id, name: p.name, multi_day_player_id: p.multi_day_player_id })))
+
     // Calculate results for this round
     const roundResults = calculateRoundResults(round, roundPlayers, scores)
+    console.log(`Round results:`, roundResults)
 
     // Assign points based on position
     for (const result of roundResults) {
+      const roundPlayer = roundPlayers.find(rp => rp.id === result.playerId)
+      console.log(`Looking for multiDayPlayer: result.playerId=${result.playerId}, roundPlayer.multi_day_player_id=${roundPlayer?.multi_day_player_id}`)
+
       const multiDayPlayer = standings.find(s => {
-        const roundPlayer = roundPlayers.find(rp => rp.id === result.playerId)
         return roundPlayer && roundPlayer.multi_day_player_id === s.playerId
       })
+
+      if (!multiDayPlayer) {
+        console.log(`WARNING: No matching multiDayPlayer found for ${roundPlayer?.name}`)
+        console.log(`Available standings playerIds:`, standings.map(s => s.playerId))
+      }
 
       if (multiDayPlayer) {
         // Find points for this position
