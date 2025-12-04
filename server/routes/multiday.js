@@ -439,13 +439,14 @@ router.get('/:id/standings', (req, res) => {
   try {
     const { id } = req.params
 
-    const tournament = db.prepare('SELECT * FROM multi_day_tournaments WHERE id = ?').get(id)
+    // Find by ID or slug
+    let tournament = db.prepare('SELECT * FROM multi_day_tournaments WHERE id = ? OR slug = ?').get(id, id)
     if (!tournament) {
       return res.status(404).json({ error: 'Multi-day tournament not found' })
     }
 
-    const players = db.prepare('SELECT * FROM multi_day_players WHERE multi_day_id = ?').all(id)
-    const rounds = db.prepare('SELECT * FROM tournaments WHERE multi_day_id = ? ORDER BY day_number, round_number').all(id)
+    const players = db.prepare('SELECT * FROM multi_day_players WHERE multi_day_id = ?').all(tournament.id)
+    const rounds = db.prepare('SELECT * FROM tournaments WHERE multi_day_id = ? ORDER BY day_number, round_number').all(tournament.id)
 
     const standings = calculateMultiDayStandings(tournament, players, rounds)
 
@@ -509,40 +510,25 @@ function calculateMultiDayStandings(multiDay, players, rounds) {
     totalStrokes: 0
   }))
 
-  console.log(`All rounds for tournament:`, rounds.map(r => ({ id: r.id, name: r.name, status: r.status, multi_day_id: r.multi_day_id })))
-
   // Process each round
   for (const round of rounds) {
     // Skip rounds that haven't been played yet
-    if (round.status === 'setup' || round.status === 'scheduled') {
-      console.log(`Skipping round ${round.id} (${round.name}) - status: ${round.status}`)
-      continue
-    }
+    if (round.status === 'setup' || round.status === 'scheduled') continue
 
     // Get round players and scores
     const roundPlayers = db.prepare('SELECT * FROM players WHERE tournament_id = ?').all(round.id)
     const scores = db.prepare('SELECT * FROM scores WHERE tournament_id = ?').all(round.id)
 
-    console.log(`Processing round ${round.id} (${round.name}), status: ${round.status}`)
-    console.log(`Round players:`, roundPlayers.map(p => ({ id: p.id, name: p.name, multi_day_player_id: p.multi_day_player_id })))
-
     // Calculate results for this round
     const roundResults = calculateRoundResults(round, roundPlayers, scores)
-    console.log(`Round results:`, roundResults)
 
     // Assign points based on position
     for (const result of roundResults) {
       const roundPlayer = roundPlayers.find(rp => rp.id === result.playerId)
-      console.log(`Looking for multiDayPlayer: result.playerId=${result.playerId}, roundPlayer.multi_day_player_id=${roundPlayer?.multi_day_player_id}`)
 
       const multiDayPlayer = standings.find(s => {
         return roundPlayer && roundPlayer.multi_day_player_id === s.playerId
       })
-
-      if (!multiDayPlayer) {
-        console.log(`WARNING: No matching multiDayPlayer found for ${roundPlayer?.name}`)
-        console.log(`Available standings playerIds:`, standings.map(s => s.playerId))
-      }
 
       if (multiDayPlayer) {
         // Find points for this position
