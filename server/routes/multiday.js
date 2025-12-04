@@ -509,10 +509,15 @@ function calculateMultiDayStandings(multiDay, players, rounds) {
     totalStrokes: 0
   }))
 
+  console.log(`All rounds for tournament:`, rounds.map(r => ({ id: r.id, name: r.name, status: r.status, multi_day_id: r.multi_day_id })))
+
   // Process each round
   for (const round of rounds) {
     // Skip rounds that haven't been played yet
-    if (round.status === 'setup' || round.status === 'scheduled') continue
+    if (round.status === 'setup' || round.status === 'scheduled') {
+      console.log(`Skipping round ${round.id} (${round.name}) - status: ${round.status}`)
+      continue
+    }
 
     // Get round players and scores
     const roundPlayers = db.prepare('SELECT * FROM players WHERE tournament_id = ?').all(round.id)
