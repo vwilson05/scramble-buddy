@@ -450,13 +450,26 @@ function toggleGreenieHole(holeNumber) {
   }
 }
 
+const editingHoleDetail = ref(null) // Which hole is being edited in detail
+
 function startEditingHoles() {
   editableHoles.value = courseStore.holes.map(h => ({
     hole_number: h.hole_number,
     par: h.par,
-    handicap_rating: h.handicap_rating
+    handicap_rating: h.handicap_rating || h.hole_number,
+    yardage_white: h.yardage_white || null,
+    yardage_blue: h.yardage_blue || null,
+    yardage_red: h.yardage_red || null
   }))
   editingHoles.value = true
+}
+
+function openHoleDetail(hole) {
+  editingHoleDetail.value = hole.hole_number
+}
+
+function closeHoleDetail() {
+  editingHoleDetail.value = null
 }
 
 async function saveHoleEdits() {
@@ -914,29 +927,96 @@ function getTeamColorClass(teamNum, type = 'bg') {
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              Tap par to change (3, 4, or 5)
+              Tap hole to edit details
             </div>
           </div>
+
+          <!-- Hole Detail Editor Modal -->
+          <div v-if="editingHoleDetail" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+            <div class="bg-gray-800 rounded-xl p-4 w-full max-w-sm">
+              <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-bold">Hole {{ editingHoleDetail }}</h3>
+                <button @click="closeHoleDetail" class="text-gray-400 hover:text-white">
+                  <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div v-if="editableHoles[editingHoleDetail - 1]" class="space-y-4">
+                <!-- Par -->
+                <div>
+                  <label class="text-sm text-gray-400 block mb-1">Par</label>
+                  <div class="flex gap-2">
+                    <button
+                      v-for="p in [3, 4, 5]"
+                      :key="p"
+                      @click="editableHoles[editingHoleDetail - 1].par = p"
+                      :class="[
+                        'flex-1 py-2 rounded-lg font-bold transition-colors',
+                        editableHoles[editingHoleDetail - 1].par === p ? 'bg-golf-green text-white' : 'bg-gray-700 text-gray-300'
+                      ]"
+                    >
+                      {{ p }}
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Handicap -->
+                <div>
+                  <label class="text-sm text-gray-400 block mb-1">Handicap Rating (1-18)</label>
+                  <input
+                    v-model.number="editableHoles[editingHoleDetail - 1].handicap_rating"
+                    type="number"
+                    min="1"
+                    max="18"
+                    class="w-full p-2 bg-gray-700 rounded-lg text-center text-lg"
+                  >
+                </div>
+
+                <!-- Yardage -->
+                <div>
+                  <label class="text-sm text-gray-400 block mb-1">Yardage (White tees)</label>
+                  <input
+                    v-model.number="editableHoles[editingHoleDetail - 1].yardage_white"
+                    type="number"
+                    min="50"
+                    max="700"
+                    placeholder="e.g. 385"
+                    class="w-full p-2 bg-gray-700 rounded-lg text-center text-lg"
+                  >
+                </div>
+
+                <button @click="closeHoleDetail" class="w-full py-2 bg-golf-green rounded-lg font-semibold">
+                  Done
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Hole Grid -->
           <div class="grid grid-cols-9 gap-1 text-xs text-center">
-            <div v-for="hole in editableHoles.slice(0, 9)" :key="hole.hole_number" class="bg-gray-700/50 rounded p-1">
+            <div
+              v-for="hole in editableHoles.slice(0, 9)"
+              :key="hole.hole_number"
+              @click="openHoleDetail(hole)"
+              class="bg-gray-700/50 rounded p-1 cursor-pointer hover:bg-gray-600/50 transition-colors"
+            >
               <div class="text-gray-400">{{ hole.hole_number }}</div>
-              <button
-                @click="hole.par = hole.par === 5 ? 3 : hole.par + 1"
-                class="font-bold w-full py-1 hover:bg-yellow-500/30 rounded transition-colors"
-              >
-                {{ hole.par }}
-              </button>
+              <div class="font-bold">{{ hole.par }}</div>
+              <div class="text-[10px] text-gray-500">{{ hole.yardage_white || '-' }}</div>
             </div>
           </div>
           <div class="mt-1 grid grid-cols-9 gap-1 text-xs text-center">
-            <div v-for="hole in editableHoles.slice(9, 18)" :key="hole.hole_number" class="bg-gray-700/50 rounded p-1">
+            <div
+              v-for="hole in editableHoles.slice(9, 18)"
+              :key="hole.hole_number"
+              @click="openHoleDetail(hole)"
+              class="bg-gray-700/50 rounded p-1 cursor-pointer hover:bg-gray-600/50 transition-colors"
+            >
               <div class="text-gray-400">{{ hole.hole_number }}</div>
-              <button
-                @click="hole.par = hole.par === 5 ? 3 : hole.par + 1"
-                class="font-bold w-full py-1 hover:bg-yellow-500/30 rounded transition-colors"
-              >
-                {{ hole.par }}
-              </button>
+              <div class="font-bold">{{ hole.par }}</div>
+              <div class="text-[10px] text-gray-500">{{ hole.yardage_white || '-' }}</div>
             </div>
           </div>
           <div class="mt-2 text-center text-sm text-gray-400">
