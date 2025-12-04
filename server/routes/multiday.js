@@ -572,70 +572,26 @@ function calculateMultiDayStandings(multiDay, players, rounds) {
 }
 
 function calculateRoundResults(round, players, scores) {
-  const isTeamGame = round.is_team_game
+  // For multi-day tournament standings, we always track individual player performance.
+  // Team game format affects round betting/scoring, but standings credit individual winners.
+  const results = players.map(player => {
+    const playerScores = scores.filter(s => s.player_id === player.id)
+    const grossTotal = playerScores.reduce((sum, s) => sum + (s.strokes || 0), 0)
+    const holesPlayed = playerScores.filter(s => s.strokes).length
 
-  if (isTeamGame) {
-    // Group by team
-    const teams = {}
-    for (const player of players) {
-      if (!teams[player.team]) {
-        teams[player.team] = { players: [], team: player.team }
-      }
-      teams[player.team].players.push(player)
+    return {
+      playerId: player.id,
+      playerName: player.name,
+      grossTotal,
+      holesPlayed,
+      toPar: grossTotal - (holesPlayed * 4) // Rough estimate
     }
+  })
 
-    const teamResults = []
-    for (const [teamNum, teamData] of Object.entries(teams)) {
-      const playerIds = teamData.players.map(p => p.id)
-      let grossTotal = 0
-      let holesPlayed = 0
-
-      for (let hole = 1; hole <= 18; hole++) {
-        const holeScores = playerIds
-          .map(id => scores.find(s => s.player_id === id && s.hole_number === hole)?.strokes)
-          .filter(s => s !== undefined && s !== null)
-
-        if (holeScores.length > 0) {
-          holesPlayed++
-          // Use best ball for team games
-          grossTotal += Math.min(...holeScores)
-        }
-      }
-
-      teamResults.push({
-        playerId: teamData.players[0]?.id, // Use first player's ID for linking
-        team: parseInt(teamNum),
-        grossTotal,
-        holesPlayed,
-        toPar: grossTotal - (holesPlayed * 4) // Rough estimate
-      })
-    }
-
-    // Sort and assign positions
-    teamResults.sort((a, b) => a.grossTotal - b.grossTotal)
-    teamResults.forEach((r, i) => { r.position = i + 1 })
-    return teamResults
-  } else {
-    // Individual results
-    const results = players.map(player => {
-      const playerScores = scores.filter(s => s.player_id === player.id)
-      const grossTotal = playerScores.reduce((sum, s) => sum + (s.strokes || 0), 0)
-      const holesPlayed = playerScores.filter(s => s.strokes).length
-
-      return {
-        playerId: player.id,
-        playerName: player.name,
-        grossTotal,
-        holesPlayed,
-        toPar: grossTotal - (holesPlayed * 4) // Rough estimate
-      }
-    })
-
-    // Sort and assign positions
-    results.sort((a, b) => a.grossTotal - b.grossTotal)
-    results.forEach((r, i) => { r.position = i + 1 })
-    return results
-  }
+  // Sort by gross total (lowest wins) and assign positions
+  results.sort((a, b) => a.grossTotal - b.grossTotal)
+  results.forEach((r, i) => { r.position = i + 1 })
+  return results
 }
 
 export default router
