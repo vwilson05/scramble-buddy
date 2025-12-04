@@ -117,12 +117,15 @@ const newPlayerHandicap = ref('')
 
 function openEditTournament() {
   if (tournament.value) {
-    let pointSystem = []
-    try {
-      pointSystem = JSON.parse(tournament.value.point_system || '[]')
-    } catch (e) {
-      // Default point system if parsing fails
-      pointSystem = []
+    // point_system is already parsed by the server, use it directly
+    let pointSystem = tournament.value.point_system || []
+    // Handle case where it might still be a string
+    if (typeof pointSystem === 'string') {
+      try {
+        pointSystem = JSON.parse(pointSystem)
+      } catch (e) {
+        pointSystem = []
+      }
     }
     editForm.value = {
       name: tournament.value.name,
