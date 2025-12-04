@@ -33,6 +33,11 @@ const overallAmount = ref(20)
 const autoDoubleOverall = ref(true)
 const perHoleAmount = ref(5)
 const startHole = ref(1)
+// Segment selection - which segments to include in the bet
+const includeFront = ref(true)
+const includeMiddle = ref(true)
+const includeBack = ref(true)
+const includeOverall = ref(true)
 
 const players = computed(() => tournamentStore.players)
 const tournament = computed(() => tournamentStore.currentTournament)
@@ -147,7 +152,12 @@ const canProceed = computed(() => {
   switch (setupStep.value) {
     case 1: return party1.value.length > 0 && party2.value.length > 0
     case 2: return gameType.value
-    case 3: return true
+    case 3:
+      // For Nassau, require at least one segment selected
+      if (gameType.value === 'nassau') {
+        return hasSelectedSegment.value
+      }
+      return true
     default: return false
   }
 })
@@ -177,17 +187,24 @@ const effectiveBets = computed(() => {
   const bets = []
 
   if (nassauFormat.value === '6-6-6') {
-    if (hole <= 6) bets.push({ name: 'Front 6', holes: '1-6', amount: segmentAmount.value })
-    if (hole <= 12) bets.push({ name: 'Middle 6', holes: `${Math.max(7, hole)}-12`, amount: segmentAmount.value })
-    if (hole <= 18) bets.push({ name: 'Back 6', holes: `${Math.max(13, hole)}-18`, amount: segmentAmount.value })
+    if (hole <= 6 && includeFront.value) bets.push({ name: 'Front 6', holes: '1-6', amount: segmentAmount.value })
+    if (hole <= 12 && includeMiddle.value) bets.push({ name: 'Middle 6', holes: `${Math.max(7, hole)}-12`, amount: segmentAmount.value })
+    if (hole <= 18 && includeBack.value) bets.push({ name: 'Back 6', holes: `${Math.max(13, hole)}-18`, amount: segmentAmount.value })
   } else {
-    if (hole <= 9) bets.push({ name: 'Front 9', holes: '1-9', amount: segmentAmount.value })
-    if (hole <= 18) bets.push({ name: 'Back 9', holes: `${Math.max(10, hole)}-18`, amount: segmentAmount.value })
+    if (hole <= 9 && includeFront.value) bets.push({ name: 'Front 9', holes: '1-9', amount: segmentAmount.value })
+    if (hole <= 18 && includeBack.value) bets.push({ name: 'Back 9', holes: `${Math.max(10, hole)}-18`, amount: segmentAmount.value })
   }
 
-  bets.push({ name: 'Overall', holes: `${hole}-18`, amount: overallAmount.value })
+  if (includeOverall.value) {
+    bets.push({ name: 'Overall', holes: `${hole}-18`, amount: overallAmount.value })
+  }
 
   return bets
+})
+
+// Check if at least one segment is selected
+const hasSelectedSegment = computed(() => {
+  return includeFront.value || includeMiddle.value || includeBack.value || includeOverall.value
 })
 
 const totalExposure = computed(() => {
@@ -244,6 +261,11 @@ function resetForm() {
   autoDoubleOverall.value = true
   perHoleAmount.value = 5
   startHole.value = props.currentHole
+  includeFront.value = true
+  includeMiddle.value = true
+  includeBack.value = true
+  includeOverall.value = true
+  saveError.value = ''
 }
 
 function togglePlayer(player, party) {
@@ -266,30 +288,43 @@ function isInParty(playerId, party) {
   return target.some(p => p.playerId === playerId)
 }
 
+const saveError = ref('')
+const saving = ref(false)
+
 async function createBet() {
-  const name = betName.value || `${party1Name.value} vs ${party2Name.value}`
+  saveError.value = ''
+  saving.value = true
 
-  await sideBetsStore.createSideBet({
-    tournament_id: props.tournamentId,
-    name,
-    game_type: gameType.value,
-    nassau_format: gameType.value === 'nassau' ? nassauFormat.value : null,
-    use_high_low: useHighLow.value,
-    party1: party1.value,
-    party2: party2.value,
-    party1_name: party1Name.value,
-    party2_name: party2Name.value,
-    front_amount: segmentAmount.value,
-    middle_amount: nassauFormat.value === '6-6-6' ? segmentAmount.value : 0,
-    back_amount: segmentAmount.value,
-    overall_amount: overallAmount.value,
-    per_hole_amount: perHoleAmount.value,
-    start_hole: startHole.value
-  })
+  try {
+    const name = betName.value || `${party1Name.value} vs ${party2Name.value}`
 
-  await sideBetsStore.fetchSideBets(props.tournamentId)
-  view.value = 'list'
-  resetForm()
+    await sideBetsStore.createSideBet({
+      tournament_id: props.tournamentId,
+      name,
+      game_type: gameType.value,
+      nassau_format: gameType.value === 'nassau' ? nassauFormat.value : null,
+      use_high_low: useHighLow.value,
+      party1: party1.value,
+      party2: party2.value,
+      party1_name: party1Name.value,
+      party2_name: party2Name.value,
+      front_amount: includeFront.value ? segmentAmount.value : 0,
+      middle_amount: (nassauFormat.value === '6-6-6' && includeMiddle.value) ? segmentAmount.value : 0,
+      back_amount: includeBack.value ? segmentAmount.value : 0,
+      overall_amount: includeOverall.value ? overallAmount.value : 0,
+      per_hole_amount: perHoleAmount.value,
+      start_hole: startHole.value
+    })
+
+    await sideBetsStore.fetchSideBets(props.tournamentId)
+    view.value = 'list'
+    resetForm()
+  } catch (err) {
+    console.error('Error creating side bet:', err)
+    saveError.value = err.response?.data?.error || err.message || 'Failed to create side bet'
+  } finally {
+    saving.value = false
+  }
 }
 
 async function deleteBet(betId) {
@@ -828,8 +863,50 @@ function getLosingParty(bet, segment) {
 
           <template v-if="gameType === 'nassau'">
             <div class="space-y-4">
+              <!-- Segment Selection -->
+              <div class="bg-gray-800 rounded-xl p-4">
+                <div class="text-sm font-semibold mb-3">Which segments to bet on?</div>
+                <div class="space-y-2">
+                  <label class="flex items-center gap-3 cursor-pointer">
+                    <input
+                      v-model="includeFront"
+                      type="checkbox"
+                      class="w-5 h-5 rounded bg-gray-700 border-gray-600 text-golf-green focus:ring-golf-green"
+                    >
+                    <span>{{ nassauFormat === '6-6-6' ? 'Front 6 (1-6)' : 'Front 9 (1-9)' }}</span>
+                  </label>
+                  <label v-if="nassauFormat === '6-6-6'" class="flex items-center gap-3 cursor-pointer">
+                    <input
+                      v-model="includeMiddle"
+                      type="checkbox"
+                      class="w-5 h-5 rounded bg-gray-700 border-gray-600 text-golf-green focus:ring-golf-green"
+                    >
+                    <span>Middle 6 (7-12)</span>
+                  </label>
+                  <label class="flex items-center gap-3 cursor-pointer">
+                    <input
+                      v-model="includeBack"
+                      type="checkbox"
+                      class="w-5 h-5 rounded bg-gray-700 border-gray-600 text-golf-green focus:ring-golf-green"
+                    >
+                    <span>{{ nassauFormat === '6-6-6' ? 'Back 6 (13-18)' : 'Back 9 (10-18)' }}</span>
+                  </label>
+                  <label class="flex items-center gap-3 cursor-pointer">
+                    <input
+                      v-model="includeOverall"
+                      type="checkbox"
+                      class="w-5 h-5 rounded bg-gray-700 border-gray-600 text-golf-green focus:ring-golf-green"
+                    >
+                    <span>Overall (1-18)</span>
+                  </label>
+                </div>
+                <div v-if="!hasSelectedSegment" class="mt-2 text-xs text-red-400">
+                  Select at least one segment
+                </div>
+              </div>
+
               <!-- Segment Amount -->
-              <div>
+              <div v-if="includeFront || includeMiddle || includeBack">
                 <label class="text-sm text-gray-400 block mb-2">Per segment</label>
                 <div class="flex items-center gap-2">
                   <span class="text-2xl text-gray-400">$</span>
@@ -843,12 +920,12 @@ function getLosingParty(bet, segment) {
               </div>
 
               <!-- Overall Amount -->
-              <div>
+              <div v-if="includeOverall">
                 <div class="flex items-center justify-between mb-2">
                   <label class="text-sm text-gray-400">Overall bet</label>
-                  <label class="flex items-center gap-2 text-xs">
+                  <label v-if="includeFront || includeMiddle || includeBack" class="flex items-center gap-2 text-xs">
                     <input type="checkbox" v-model="autoDoubleOverall" class="rounded">
-                    <span class="text-gray-400">Auto 2x</span>
+                    <span class="text-gray-400">Auto 2x segment</span>
                   </label>
                 </div>
                 <div class="flex items-center gap-2">
@@ -857,10 +934,10 @@ function getLosingParty(bet, segment) {
                     v-model.number="overallAmount"
                     type="number"
                     min="1"
-                    :disabled="autoDoubleOverall"
+                    :disabled="autoDoubleOverall && (includeFront || includeMiddle || includeBack)"
                     :class="[
                       'flex-1 p-3 rounded-lg text-2xl font-bold text-center',
-                      autoDoubleOverall ? 'bg-gray-800 text-gray-400' : 'bg-gray-700'
+                      (autoDoubleOverall && (includeFront || includeMiddle || includeBack)) ? 'bg-gray-800 text-gray-400' : 'bg-gray-700'
                     ]"
                   >
                 </div>
@@ -919,6 +996,11 @@ function getLosingParty(bet, segment) {
               <span v-if="nassauFormat && gameType === 'nassau'"> ({{ nassauFormat }})</span>
             </div>
           </div>
+
+          <!-- Error Message -->
+          <div v-if="saveError" class="mt-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">
+            {{ saveError }}
+          </div>
         </div>
       </template>
     </div>
@@ -951,9 +1033,10 @@ function getLosingParty(bet, segment) {
         <button
           v-else
           @click="createBet"
-          class="flex-1 btn-gold"
+          :disabled="saving || (gameType === 'nassau' && !hasSelectedSegment)"
+          :class="['flex-1', (saving || (gameType === 'nassau' && !hasSelectedSegment)) ? 'btn-secondary opacity-50' : 'btn-gold']"
         >
-          Create Bet
+          {{ saving ? 'Creating...' : 'Create Bet' }}
         </button>
       </div>
     </div>

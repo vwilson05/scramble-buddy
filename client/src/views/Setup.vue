@@ -1203,10 +1203,19 @@ function getTeamColorClass(teamNum, type = 'bg') {
           <div>
             <div class="font-semibold">Handicap Strokes</div>
             <div class="text-sm text-gray-400">
-              {{ handicapMode === 'gross' ? 'Full strokes (all players get their full handicap)' : 'Net strokes (relative to lowest handicap)' }}
+              {{ handicapMode === 'none' ? 'No handicaps (scratch play)' : handicapMode === 'gross' ? 'Full strokes (all players get their full handicap)' : 'Net strokes (relative to lowest handicap)' }}
             </div>
           </div>
           <div class="flex gap-1 bg-gray-700 rounded-lg p-1">
+            <button
+              @click="handicapMode = 'none'"
+              :class="[
+                'px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+                handicapMode === 'none' ? 'bg-golf-green text-white' : 'text-gray-400 hover:text-white'
+              ]"
+            >
+              None
+            </button>
             <button
               @click="handicapMode = 'gross'"
               :class="[

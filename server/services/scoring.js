@@ -81,7 +81,7 @@ function calculateNetScore(grossScore, courseHandicap, holeHandicapRating, holeP
 export function calculateLeaderboard(tournament, players, scores, holes) {
   const slopeRating = tournament.slope_rating || 113
   const greenieHoles = tournament.greenie_holes ? tournament.greenie_holes.split(',').map(Number) : []
-  const handicapMode = tournament.handicap_mode || 'gross' // 'gross' or 'net'
+  const handicapMode = tournament.handicap_mode || 'gross' // 'none', 'gross', or 'net'
 
   // Build a map for quick hole lookup
   const holeMap = {}
@@ -102,7 +102,12 @@ export function calculateLeaderboard(tournament, players, scores, holes) {
   let lowestHandicap = 0
   let displayHandicaps = {} // What we show as "playing handicap" (strokes received)
 
-  if (handicapMode === 'net') {
+  if (handicapMode === 'none') {
+    // No handicaps - everyone plays scratch
+    players.forEach(p => {
+      displayHandicaps[p.id] = 0
+    })
+  } else if (handicapMode === 'net') {
     const handicapValues = Object.values(courseHandicaps).filter(h => h >= 0)
     lowestHandicap = handicapValues.length > 0 ? Math.min(...handicapValues) : 0
 
@@ -472,7 +477,12 @@ export function calculateHighLowStandings(tournament, team1Players, team2Players
 
   // For net mode: calculate relative handicaps
   let displayHandicaps = {}
-  if (handicapMode === 'net') {
+  if (handicapMode === 'none') {
+    // No handicaps - everyone plays scratch
+    allPlayers.forEach(p => {
+      displayHandicaps[p.id] = 0
+    })
+  } else if (handicapMode === 'net') {
     const handicapValues = Object.values(courseHandicaps).filter(h => h >= 0)
     const lowestHandicap = handicapValues.length > 0 ? Math.min(...handicapValues) : 0
     allPlayers.forEach(p => {

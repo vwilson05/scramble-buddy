@@ -3,19 +3,34 @@ import db from '../db/index.js'
 
 const router = express.Router()
 
+// Helper to find tournament by ID or slug
+function findTournament(idOrSlug) {
+  if (/^\d+$/.test(String(idOrSlug))) {
+    return db.prepare('SELECT * FROM tournaments WHERE id = ?').get(idOrSlug)
+  }
+  return db.prepare('SELECT * FROM tournaments WHERE slug = ?').get(idOrSlug)
+}
+
 // Get all side bets for a tournament (with calculated status)
 router.get('/:tournamentId', (req, res) => {
   try {
     const { tournamentId } = req.params
 
+    // Resolve tournament ID from slug if needed
+    const tournament = findTournament(tournamentId)
+    if (!tournament) {
+      return res.status(404).json({ error: 'Tournament not found' })
+    }
+    const actualTournamentId = tournament.id
+
     // Get all side bets including presses
     const sideBets = db.prepare(`
       SELECT * FROM side_bets WHERE tournament_id = ? ORDER BY created_at
-    `).all(tournamentId)
+    `).all(actualTournamentId)
 
     // Get tournament data for scoring
-    const players = db.prepare('SELECT * FROM players WHERE tournament_id = ?').all(tournamentId)
-    const scores = db.prepare('SELECT * FROM scores WHERE tournament_id = ?').all(tournamentId)
+    const players = db.prepare('SELECT * FROM players WHERE tournament_id = ?').all(actualTournamentId)
+    const scores = db.prepare('SELECT * FROM scores WHERE tournament_id = ?').all(actualTournamentId)
 
     // Calculate status for each bet
     const betsWithStatus = sideBets.map(bet => {
@@ -66,6 +81,13 @@ router.post('/', (req, res) => {
       auto_press
     } = req.body
 
+    // Resolve tournament ID from slug if needed
+    const tournament = findTournament(tournament_id)
+    if (!tournament) {
+      return res.status(404).json({ error: 'Tournament not found' })
+    }
+    const actualTournamentId = tournament.id
+
     const result = db.prepare(`
       INSERT INTO side_bets (
         tournament_id, parent_bet_id, name, game_type, nassau_format, use_high_low,
@@ -74,7 +96,7 @@ router.post('/', (req, res) => {
         segment, start_hole, auto_press
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
-      tournament_id,
+      actualTournamentId,
       parent_bet_id || null,
       name || null,
       game_type,

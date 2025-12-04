@@ -662,13 +662,22 @@ async function shareLink() {
           <label class="block text-sm text-gray-400 mb-2">Handicap Strokes</label>
           <div class="flex gap-2">
             <button
+              @click="editHandicapMode = 'none'"
+              :class="[
+                'flex-1 py-3 rounded-lg font-semibold transition-colors',
+                editHandicapMode === 'none' ? 'bg-golf-green text-white' : 'bg-gray-700 text-gray-400'
+              ]"
+            >
+              None
+            </button>
+            <button
               @click="editHandicapMode = 'gross'"
               :class="[
                 'flex-1 py-3 rounded-lg font-semibold transition-colors',
                 editHandicapMode === 'gross' ? 'bg-golf-green text-white' : 'bg-gray-700 text-gray-400'
               ]"
             >
-              Gross (Full)
+              Gross
             </button>
             <button
               @click="editHandicapMode = 'net'"
@@ -677,11 +686,11 @@ async function shareLink() {
                 editHandicapMode === 'net' ? 'bg-golf-green text-white' : 'bg-gray-700 text-gray-400'
               ]"
             >
-              Net (Relative)
+              Net
             </button>
           </div>
           <p class="text-xs text-gray-500 mt-2">
-            {{ editHandicapMode === 'gross' ? 'All players use their full handicap strokes' : 'Strokes relative to lowest handicap (lowest gets 0)' }}
+            {{ editHandicapMode === 'none' ? 'No handicap strokes (scratch play)' : editHandicapMode === 'gross' ? 'All players use their full handicap strokes' : 'Strokes relative to lowest handicap (lowest gets 0)' }}
           </p>
         </div>
 
@@ -689,7 +698,7 @@ async function shareLink() {
         <div class="mb-6 p-3 bg-gray-800 rounded-lg">
           <div class="text-xs text-gray-400 mb-1">Current Setting</div>
           <div class="font-semibold">
-            {{ store.currentTournament?.handicap_mode === 'net' ? 'Net (Relative)' : 'Gross (Full)' }}
+            {{ store.currentTournament?.handicap_mode === 'none' ? 'None (Scratch)' : store.currentTournament?.handicap_mode === 'net' ? 'Net (Relative)' : 'Gross (Full)' }}
           </div>
         </div>
 

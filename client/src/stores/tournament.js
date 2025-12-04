@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import axios from 'axios'
+import { useCourseStore } from './course'
 
 const API_URL = '/api'
 
@@ -45,6 +46,22 @@ export const useTournamentStore = defineStore('tournament', () => {
       currentTournament.value = data.tournament
       players.value = data.players
       scores.value = data.scores
+
+      // Populate course store with holes from tournament data
+      // This ensures par/yardage data is available in scorecard
+      if (data.holes && data.holes.length > 0) {
+        const courseStore = useCourseStore()
+        courseStore.holes = data.holes
+
+        // Also set selectedCourse if we have course info
+        if (data.tournament?.course_id) {
+          courseStore.selectedCourse = {
+            id: data.tournament.course_id,
+            name: data.tournament.course_name,
+            slope_rating: data.tournament.slope_rating
+          }
+        }
+      }
     } catch (err) {
       error.value = err.message
     } finally {
