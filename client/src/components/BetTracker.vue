@@ -64,6 +64,7 @@ const hasMainBet = computed(() => {
 // Game type helpers
 const isNassau = computed(() => tournament.value?.game_type === 'nassau')
 const isSkins = computed(() => tournament.value?.game_type === 'skins')
+const isTeamGame = computed(() => ['scramble', 'best_ball', 'high_low'].includes(tournament.value?.game_type))
 const nassauFormat = computed(() => tournament.value?.nassau_format || '6-6-6')
 
 // Get segment ranges for Nassau
@@ -289,6 +290,195 @@ const overallStandings = computed(() => {
   return standings
 })
 
+// Team standings for team games (best ball net)
+const teamStandings = computed(() => {
+  if (!isTeamGame.value) return []
+
+  // Group players by team
+  const teams = {}
+  players.value.forEach(player => {
+    const teamId = player.team || 0
+    if (!teams[teamId]) {
+      teams[teamId] = { teamId, players: [], teamName: '' }
+    }
+    teams[teamId].players.push(player)
+  })
+
+  // Calculate team scores (best ball - lowest net per hole)
+  const teamResults = Object.values(teams).map(team => {
+    team.teamName = team.players.map(p => p.name).join(' & ')
+
+    let teamNet = 0
+    let teamPar = 0
+    let holesPlayed = 0
+
+    for (let h = 1; h <= 18; h++) {
+      // Get net scores for all team members on this hole
+      const holeNetScores = team.players.map(player => {
+        const playerEntry = leaderboard.value.find(e => e.player?.id === player.id)
+        if (playerEntry?.holeScores?.[h - 1]?.net !== null && playerEntry?.holeScores?.[h - 1]?.net !== undefined) {
+          return {
+            net: playerEntry.holeScores[h - 1].net,
+            par: playerEntry.holeScores[h - 1].par || 4
+          }
+        }
+        return null
+      }).filter(s => s !== null)
+
+      if (holeNetScores.length > 0) {
+        // Best ball - take lowest net score
+        const bestNet = Math.min(...holeNetScores.map(s => s.net))
+        const holePar = holeNetScores[0].par
+        teamNet += bestNet
+        teamPar += holePar
+        holesPlayed++
+      }
+    }
+
+    return {
+      ...team,
+      netTotal: teamNet,
+      toPar: teamNet - teamPar,
+      holesPlayed,
+      display: holesPlayed > 0 ? (teamNet - teamPar > 0 ? `+${teamNet - teamPar}` : teamNet - teamPar === 0 ? 'E' : teamNet - teamPar) : '-'
+    }
+  })
+
+  // Sort by net to par (lowest first)
+  teamResults.sort((a, b) => {
+    if (a.holesPlayed === 0 && b.holesPlayed === 0) return 0
+    if (a.holesPlayed === 0) return 1
+    if (b.holesPlayed === 0) return -1
+    return a.toPar - b.toPar
+  })
+
+  return teamResults
+})
+
+// Get projected team payouts based on current standings
+const projectedTeamPayouts = computed(() => {
+  if (!payoutConfig.value?.teamPayouts?.length || teamStandings.value.length === 0) return []
+
+  return payoutConfig.value.teamPayouts.map((payout, idx) => {
+    const team = teamStandings.value[idx]
+    return {
+      place: payout.place,
+      amount: payout.amount,
+      team: team || null,
+      teamName: team?.teamName || '-'
+    }
+  })
+})
+
+// Get projected individual payouts based on current standings
+const projectedIndividualPayouts = computed(() => {
+  if (!payoutConfig.value?.individualPayouts?.length || overallStandings.value.length === 0) return []
+
+  return payoutConfig.value.individualPayouts.map((payout, idx) => {
+    const standing = overallStandings.value[idx]
+    return {
+      place: payout.place,
+      amount: payout.amount,
+      player: standing?.player || null,
+      playerName: standing?.player?.name || '-'
+    }
+  })
+})
+
+// Calculate final settlements (who owes who)
+const finalSettlements = computed(() => {
+  if (!payoutConfig.value || teamStandings.value.length === 0) return []
+
+  const entryFee = payoutConfig.value.entryFee || 0
+  const playerNetResults = {}
+
+  // Initialize all players with -entryFee (they paid in)
+  players.value.forEach(player => {
+    playerNetResults[player.id] = {
+      player,
+      paid: entryFee,
+      won: 0,
+      net: -entryFee
+    }
+  })
+
+  // Add team prize winnings (split equally among team members)
+  if (payoutConfig.value.teamPayouts?.length && isTeamGame.value) {
+    payoutConfig.value.teamPayouts.forEach((payout, idx) => {
+      const team = teamStandings.value[idx]
+      if (team && team.players.length > 0 && team.holesPlayed > 0) {
+        const perPlayer = payout.amount / team.players.length
+        team.players.forEach(player => {
+          if (playerNetResults[player.id]) {
+            playerNetResults[player.id].won += perPlayer
+            playerNetResults[player.id].net += perPlayer
+          }
+        })
+      }
+    })
+  }
+
+  // Add individual prize winnings
+  if (payoutConfig.value.individualPayouts?.length) {
+    payoutConfig.value.individualPayouts.forEach((payout, idx) => {
+      const standing = overallStandings.value[idx]
+      if (standing?.player && playerNetResults[standing.player.id]) {
+        playerNetResults[standing.player.id].won += payout.amount
+        playerNetResults[standing.player.id].net += payout.amount
+      }
+    })
+  }
+
+  // Convert to array and sort by net (winners first, then losers)
+  const results = Object.values(playerNetResults)
+  results.sort((a, b) => b.net - a.net)
+
+  return results
+})
+
+// Simplified settlements (who pays who)
+const simplifiedSettlements = computed(() => {
+  if (finalSettlements.value.length === 0) return []
+
+  const winners = finalSettlements.value.filter(r => r.net > 0)
+  const losers = finalSettlements.value.filter(r => r.net < 0)
+  const settlements = []
+
+  // Clone to avoid modifying computed values
+  const winnerBalances = winners.map(w => ({ ...w, remaining: w.net }))
+  const loserBalances = losers.map(l => ({ ...l, remaining: Math.abs(l.net) }))
+
+  // Match losers to winners
+  for (const loser of loserBalances) {
+    for (const winner of winnerBalances) {
+      if (loser.remaining <= 0) break
+      if (winner.remaining <= 0) continue
+
+      const amount = Math.min(loser.remaining, winner.remaining)
+      if (amount > 0) {
+        settlements.push({
+          from: loser.player,
+          to: winner.player,
+          amount: Math.round(amount * 100) / 100
+        })
+        loser.remaining -= amount
+        winner.remaining -= amount
+      }
+    }
+  }
+
+  return settlements
+})
+
+// Check if round is complete (all players have played all 18 holes)
+const roundComplete = computed(() => {
+  if (players.value.length === 0) return false
+  return players.value.every(player => {
+    const entry = leaderboard.value.find(e => e.player?.id === player.id)
+    return entry?.holesPlayed >= 18
+  })
+})
+
 // Side bets
 const sideBets = computed(() => {
   return sideBetsStore.sideBets.filter(b => !b.parent_bet_id)
@@ -495,8 +685,41 @@ function formatMoney(amount) {
           </div>
         </div>
 
-        <!-- Stroke Play / Simple Bet -->
-        <div v-else-if="tournament.bet_amount > 0" class="simple-bet-section">
+        <!-- Team Game Standings (Best Ball, Scramble) -->
+        <div v-if="isTeamGame && teamStandings.length > 0" class="team-standings-section">
+          <div class="section-header">
+            <span class="section-title">{{ tournament.game_type === 'best_ball' ? 'Best Ball' : tournament.game_type === 'scramble' ? 'Scramble' : 'Team' }} Standings</span>
+            <span class="section-subtitle">{{ payoutConfig ? formatMoney(payoutConfig.totalPot) + ' pot' : 'Net scores' }}</span>
+          </div>
+
+          <div class="team-standings-list">
+            <div
+              v-for="(team, idx) in teamStandings"
+              :key="team.teamId"
+              class="team-standing-row"
+              :class="{ leader: idx === 0 && team.holesPlayed > 0 }"
+            >
+              <span class="standing-pos">{{ idx + 1 }}</span>
+              <div class="team-info">
+                <span class="team-name">{{ team.teamName }}</span>
+                <span class="team-players">{{ team.players.length }} players</span>
+              </div>
+              <span class="standing-score" :class="{
+                'text-green-400': team.toPar < 0,
+                'text-red-400': team.toPar > 0,
+                'text-gray-400': team.holesPlayed === 0
+              }">
+                {{ team.display }}
+              </span>
+              <span class="standing-thru">
+                {{ team.holesPlayed > 0 ? `thru ${team.holesPlayed}` : '-' }}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Stroke Play / Simple Bet (non-team games) -->
+        <div v-else-if="tournament.bet_amount > 0 && !isTeamGame" class="simple-bet-section">
           <div class="section-header">
             <span class="section-title">{{ tournament.game_type === 'stroke_play' ? 'Stroke Play' : tournament.game_type }}</span>
             <span class="section-subtitle">{{ formatMoney(tournament.bet_amount) }} on the line</span>
@@ -525,14 +748,29 @@ function formatMoney(amount) {
           </div>
         </div>
 
-        <!-- Custom Payouts -->
+        <!-- Custom Payouts with Projected Winners -->
         <div v-if="payoutConfig" class="payouts-section">
           <div class="section-header">
-            <span class="section-title">Payouts</span>
-            <span class="section-subtitle">Total pot: {{ formatMoney(payoutConfig.totalPot) }}</span>
+            <span class="section-title">Prize Pool</span>
+            <span class="section-subtitle">Total pot: {{ formatMoney(payoutConfig.totalPot) }} ({{ players.length }} × {{ formatMoney(payoutConfig.entryFee) }})</span>
           </div>
 
-          <div v-if="payoutConfig.teamPayouts?.length" class="payout-group">
+          <!-- Team Prizes with projected winners -->
+          <div v-if="payoutConfig.teamPayouts?.length && isTeamGame" class="payout-group">
+            <div class="payout-label">Team Prizes</div>
+            <div v-for="projected in projectedTeamPayouts" :key="projected.place" class="payout-row projected">
+              <div class="payout-place-info">
+                <span class="place-label">{{ projected.place === 1 ? '1st' : projected.place === 2 ? '2nd' : projected.place === 3 ? '3rd' : projected.place + 'th' }}</span>
+                <span class="projected-winner" :class="{ 'text-green-400': projected.team?.holesPlayed > 0 }">
+                  {{ projected.teamName }}
+                </span>
+              </div>
+              <span class="text-gold payout-amount">{{ formatMoney(projected.amount) }}</span>
+            </div>
+          </div>
+
+          <!-- Non-team game team payouts (fallback) -->
+          <div v-else-if="payoutConfig.teamPayouts?.length" class="payout-group">
             <div class="payout-label">Team Prizes</div>
             <div v-for="payout in payoutConfig.teamPayouts" :key="payout.place" class="payout-row">
               <span>{{ payout.place === 1 ? '1st' : payout.place === 2 ? '2nd' : payout.place + 'th' }} Place</span>
@@ -540,11 +778,54 @@ function formatMoney(amount) {
             </div>
           </div>
 
+          <!-- Individual Prizes with projected winners -->
           <div v-if="payoutConfig.individualPayouts?.length" class="payout-group">
             <div class="payout-label">Individual Prizes</div>
-            <div v-for="payout in payoutConfig.individualPayouts" :key="payout.place" class="payout-row">
-              <span>{{ payout.place === 1 ? '1st' : payout.place === 2 ? '2nd' : payout.place + 'th' }} Place</span>
-              <span class="text-gold">{{ formatMoney(payout.amount) }}</span>
+            <div v-for="projected in projectedIndividualPayouts" :key="projected.place" class="payout-row projected">
+              <div class="payout-place-info">
+                <span class="place-label">{{ projected.place === 1 ? '1st' : projected.place === 2 ? '2nd' : projected.place === 3 ? '3rd' : projected.place + 'th' }}</span>
+                <span class="projected-winner" :class="{ 'text-green-400': projected.player }">
+                  {{ projected.playerName }}
+                </span>
+              </div>
+              <span class="text-gold payout-amount">{{ formatMoney(projected.amount) }}</span>
+            </div>
+          </div>
+
+          <!-- Greenie Pot -->
+          <div v-if="payoutConfig.greeniePot" class="payout-group">
+            <div class="payout-label">Greenie Pot</div>
+            <div class="payout-row">
+              <span>Split among winners</span>
+              <span class="text-gold">{{ formatMoney(payoutConfig.greeniePot) }}</span>
+            </div>
+          </div>
+
+          <!-- Settlement Section -->
+          <div v-if="simplifiedSettlements.length > 0" class="settlement-section">
+            <div class="settlement-header">
+              <span class="settlement-title">{{ roundComplete ? 'Final Settlement' : 'Projected Settlement' }}</span>
+              <span v-if="!roundComplete" class="settlement-note">Based on current standings</span>
+            </div>
+
+            <div class="settlement-list">
+              <div v-for="(settlement, idx) in simplifiedSettlements" :key="idx" class="settlement-row">
+                <span class="settlement-from">{{ settlement.from.name }}</span>
+                <span class="settlement-arrow">→</span>
+                <span class="settlement-to">{{ settlement.to.name }}</span>
+                <span class="settlement-amount">{{ formatMoney(settlement.amount) }}</span>
+              </div>
+            </div>
+
+            <!-- Player Net Summary -->
+            <div class="net-summary">
+              <div class="net-summary-title">Net Result by Player</div>
+              <div v-for="result in finalSettlements" :key="result.player.id" class="net-row">
+                <span class="net-player">{{ result.player.name }}</span>
+                <span :class="['net-amount', result.net > 0 ? 'text-green-400' : result.net < 0 ? 'text-red-400' : 'text-gray-400']">
+                  {{ result.net >= 0 ? '+' : '' }}{{ formatMoney(result.net) }}
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -860,6 +1141,55 @@ function formatMoney(amount) {
   text-align: right;
 }
 
+/* Team standings section */
+.team-standings-section {
+  background: #111827;
+  border-radius: 12px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.team-standings-list {
+  margin-top: 0.5rem;
+}
+
+.team-standing-row {
+  display: grid;
+  grid-template-columns: 2rem 1fr auto 3.5rem;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 0.5rem;
+  border-radius: 6px;
+  border-bottom: 1px solid #374151;
+}
+
+.team-standing-row:last-child {
+  border-bottom: none;
+}
+
+.team-standing-row.leader {
+  background: rgba(16, 185, 129, 0.15);
+}
+
+.team-standing-row.leader .standing-pos {
+  color: #10b981;
+}
+
+.team-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.team-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.team-players {
+  font-size: 0.7rem;
+  color: #6b7280;
+}
+
 /* Simple bet section */
 .simple-bet-section {
   background: #111827;
@@ -897,9 +1227,124 @@ function formatMoney(amount) {
   border-bottom: none;
 }
 
+.payout-row.projected {
+  align-items: center;
+  padding: 0.6rem 0;
+}
+
+.payout-place-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.place-label {
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.projected-winner {
+  font-size: 0.75rem;
+  color: #9ca3af;
+}
+
+.payout-amount {
+  font-size: 1.1rem;
+}
+
 .text-gold {
   color: #fbbf24;
   font-weight: 600;
+}
+
+/* Settlement section */
+.settlement-section {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #374151;
+}
+
+.settlement-header {
+  margin-bottom: 0.75rem;
+}
+
+.settlement-title {
+  font-weight: 700;
+  font-size: 1rem;
+  display: block;
+}
+
+.settlement-note {
+  font-size: 0.75rem;
+  color: #9ca3af;
+}
+
+.settlement-list {
+  background: #1f2937;
+  border-radius: 8px;
+  padding: 0.5rem;
+}
+
+.settlement-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  border-bottom: 1px solid #374151;
+}
+
+.settlement-row:last-child {
+  border-bottom: none;
+}
+
+.settlement-from {
+  color: #f87171;
+  font-weight: 500;
+  flex: 1;
+}
+
+.settlement-arrow {
+  color: #6b7280;
+}
+
+.settlement-to {
+  color: #4ade80;
+  font-weight: 500;
+  flex: 1;
+}
+
+.settlement-amount {
+  color: #fbbf24;
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+.net-summary {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  background: #1f2937;
+  border-radius: 8px;
+}
+
+.net-summary-title {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  margin-bottom: 0.5rem;
+}
+
+.net-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.35rem 0;
+}
+
+.net-player {
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+.net-amount {
+  font-weight: 700;
+  font-size: 0.9rem;
 }
 
 /* Greenies */
